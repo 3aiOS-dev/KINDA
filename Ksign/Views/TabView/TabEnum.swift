@@ -1,76 +1,55 @@
 //
 //  TabEnum.swift
-//  KINDA
+//  feather
+//
+//  Created by samara on 22.03.2025.
 //
 
 import SwiftUI
 import NimbleViews
 
 enum TabEnum: String, CaseIterable, Hashable {
-
     case files
     case sources
     case library
     case settings
     case certificates
 
-    // MARK: - Title
-
     var title: String {
-
         switch self {
-
         case .files:
-            return .localized("Home")
-
+            return .localized("Files")
         case .sources:
             return .localized("Sources")
-
         case .library:
             return .localized("Library")
-
         case .settings:
             return .localized("Settings")
-
         case .certificates:
             return .localized("Certificates")
         }
     }
 
-    // MARK: - Icon
-
     var icon: String {
-
         switch self {
-
         case .files:
-            return "house.fill"
-
+            return "folder.fill"
         case .sources:
             return "globe.desk"
-
         case .library:
             return "square.grid.2x2"
-
         case .settings:
             return "gearshape.2"
-
         case .certificates:
             return "person.text.rectangle"
         }
     }
 
-    // MARK: - View
-
     @ViewBuilder
-    static func view(
-        for tab: TabEnum
-    ) -> some View {
-
+    static func view(for tab: TabEnum) -> some View {
         switch tab {
-
         case .files:
-            HomeView()
+            FilesView()
 
         case .sources:
             SourcesView()
@@ -82,20 +61,13 @@ enum TabEnum: String, CaseIterable, Hashable {
             SettingsView()
 
         case .certificates:
-
-            NBNavigationView(
-                .localized("Certificates")
-            ) {
-
+            NBNavigationView(.localized("Certificates")) {
                 CertificatesView()
             }
         }
     }
 
-    // MARK: - Default Tabs
-
     static var defaultTabs: [TabEnum] {
-
         [
             .files,
             .library,
@@ -103,10 +75,7 @@ enum TabEnum: String, CaseIterable, Hashable {
         ]
     }
 
-    // MARK: - Customizable Tabs
-
     static var customizableTabs: [TabEnum] {
-
         [
             .certificates
         ]
