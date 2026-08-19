@@ -82,9 +82,11 @@ enum TabEnum: String, CaseIterable, Hashable {
             SettingsView()
 
         case .certificates:
+
             NBNavigationView(
                 .localized("Certificates")
             ) {
+
                 CertificatesView()
             }
         }
