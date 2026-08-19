@@ -28,6 +28,10 @@ struct HomeView: View {
     @State private var isImportingPresenting = false
     @State private var isDownloadingPresenting = false
 
+    // تنزيلات المتجر التي تنتظر اكتمال الاستيراد إلى المكتبة
+    @State private var pendingStoreDownloads: Set<String> = []
+    @State private var downloadWatchTasks: [String: Task<Void, Never>] = [:]
+
     @State private var alertDownloadString = ""
     @State private var searchText = ""
 
@@ -134,7 +138,13 @@ struct HomeView: View {
                             ) { app in
 
                                 StoreCellView(
-                                    app: app
+                                    app: app,
+                                    onDownloadStarted: { download in
+                                        watchStoreDownload(
+                                            download,
+                                            app: app
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -606,6 +616,15 @@ struct HomeView: View {
             }
         }
 
+        // MARK: Store Download State
+
+        .onDisappear {
+            for task in downloadWatchTasks.values {
+                task.cancel()
+            }
+            downloadWatchTasks.removeAll()
+        }
+
         // MARK: Edit Mode Cleanup
 
         .onChange(
@@ -623,6 +642,87 @@ struct HomeView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Store Download Handling
+
+extension HomeView {
+
+    /// يبدأ DownloadManager تنزيل IPA الحقيقي من ipa_url، ثم ينتظر حتى ينتهي
+    /// DownloadManager من معالجة الملف وإضافته إلى Imported/Core Data.
+    private func watchStoreDownload(
+        _ download: Download,
+        app: StoreApp
+    ) {
+        let downloadID = download.id
+
+        downloadWatchTasks[downloadID]?.cancel()
+        pendingStoreDownloads.insert(downloadID)
+
+        let task = Task { @MainActor in
+            var reachedDownloadCompletion = false
+
+            while !Task.isCancelled {
+                if let currentDownload = DownloadManager.shared.getDownload(by: downloadID) {
+                    // 1.0 تعني أن ملف IPA وصل بالكامل.
+                    // بعد ذلك DownloadManager يستدعي handlePachageFile ويزيل
+                    // العنصر فقط بعد انتهاء معالجة/استيراد الملف.
+                    if currentDownload.totalBytes > 0,
+                       currentDownload.progress >= 0.999 {
+                        reachedDownloadCompletion = true
+                    }
+                } else {
+                    break
+                }
+
+                try? await Task.sleep(
+                    nanoseconds: 300_000_000
+                )
+            }
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            // نعطي Core Data دورة صغيرة حتى يصل Imported إلى FetchedResults.
+            try? await Task.sleep(
+                nanoseconds: 500_000_000
+            )
+
+            let importedSuccessfully = importedApps.contains { imported in
+                guard let name = imported.name else {
+                    return false
+                }
+                return name.localizedCaseInsensitiveCompare(app.name) == .orderedSame
+            }
+
+            pendingStoreDownloads.remove(downloadID)
+            downloadWatchTasks[downloadID] = nil
+
+            guard reachedDownloadCompletion || importedSuccessfully else {
+                UIAlertController.showAlertWithOk(
+                    title: .localized("Error"),
+                    message: .localized(
+                        "The IPA download or import could not be completed."
+                    )
+                )
+                return
+            }
+
+            // ننتقل أولاً إلى قسم التطبيقات داخل HomeView.
+            // ثم نرسل حدثاً للـ Tabbar الخارجي حتى يفتح تبويب المكتبة فعلياً.
+            withAnimation(.smooth) {
+                selectedTab = 0
+            }
+
+            NotificationCenter.default.post(
+                name: NSNotification.Name("ksign.openLibraryTab"),
+                object: nil
+            )
+        }
+
+        downloadWatchTasks[downloadID] = task
     }
 }
 
@@ -796,8 +896,10 @@ final class KindaStoreManager: ObservableObject {
 struct StoreCellView: View {
 
     let app: StoreApp
+    let onDownloadStarted: (Download) -> Void
 
     @StateObject private var downloadManager = DownloadManager.shared
+    @State private var activeDownloadID: String?
 
     var body: some View {
 
@@ -849,25 +951,51 @@ struct StoreCellView: View {
 
             } label: {
 
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.title2)
+                if activeDownloadID != nil {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.title2)
+                }
             }
             .buttonStyle(.plain)
+            .disabled(activeDownloadID != nil)
         }
         .padding(.vertical, 4)
+        .onReceive(downloadManager.$downloads) { downloads in
+            guard let activeDownloadID else { return }
+
+            if downloads.contains(where: { $0.id == activeDownloadID }) == false {
+                self.activeDownloadID = nil
+            }
+        }
     }
 
     private func download() {
 
         guard
-            let url = URL(string: app.ipaURL)
+            let url = URL(string: app.ipaURL),
+            ["http", "https"].contains(url.scheme?.lowercased())
         else {
+            UIAlertController.showAlertWithOk(
+                title: .localized("Error"),
+                message: .localized("The IPA URL is invalid.")
+            )
             return
         }
 
-        _ = downloadManager.startDownload(
+        let downloadID = "KindaStore_\(app.id)"
+
+        // DownloadManager يقوم بالتنزيل الفعلي عبر URLSession، ثم ينقل
+        // الملف إلى مجلد التنزيلات ويستدعي FR.handlePackageFile لإضافته
+        // إلى Imported/Core Data بعد اكتمال التنزيل.
+        let download = downloadManager.startDownload(
             from: url,
-            id: "KindaStore_\(app.id)"
+            id: downloadID
         )
+
+        activeDownloadID = download.id
+        onDownloadStarted(download)
     }
 }
