@@ -2,64 +2,30 @@
 //  HomeView.swift
 //  Ksign
 //
-//  التطبيقات - الشاشة الرئيسية
+//  متجر KINDA — شاشة واحدة تعرض تطبيقات السيرفر فقط
 //
 
 import SwiftUI
 import CoreData
 import NimbleViews
 
-// MARK: - Home View
+// MARK: - Home View (Store Only)
 struct HomeView: View {
 
     // MARK: Managers
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var storeManager = KindaStoreManager.shared
 
-    // MARK: Presenting
-    @State private var selectedInfoAppPresenting: AnyApp?
-    @State private var selectedSigningAppPresenting: AnyApp?
-    @State private var selectedInstallAppPresenting: AnyApp?
-    @State private var selectedAppDylibsPresenting: AnyApp?
-
-    @State private var isBulkSigningPresenting = false
-    @State private var isBulkInstallingPresenting = false
-
-    @State private var isImportingPresenting = false
-    @State private var isDownloadingPresenting = false
+    // MARK: State
+    @State private var searchText = ""
+    @State private var selectedCategory = "الكل"
+    @State private var selectedApp: StoreApp?
 
     // تنزيلات المتجر التي تنتظر اكتمال الاستيراد إلى المكتبة
     @State private var pendingStoreDownloads: Set<String> = []
     @State private var downloadWatchTasks: [String: Task<Void, Never>] = [:]
 
-    @State private var alertDownloadString = ""
-    @State private var searchText = ""
-
-    // 0 = التطبيقات المستوردة
-    // 1 = التطبيقات الموقعة
-    // 2 = المتجر (Lovable Cloud)
-    @State private var selectedTab = 0
-
-    // MARK: Edit Mode
-    @State private var isEditMode: EditMode = .inactive
-    @State private var selectedApps: Set<String> = []
-
-    @Namespace private var namespace
-
-    // MARK: Core Data
-
-    @FetchRequest(
-        entity: Signed.entity(),
-        sortDescriptors: [
-            NSSortDescriptor(
-                keyPath: \Signed.date,
-                ascending: false
-            )
-        ],
-        animation: .snappy
-    )
-    private var signedApps: FetchedResults<Signed>
-
+    // MARK: Core Data (لمتابعة اكتمال الاستيراد فقط)
     @FetchRequest(
         entity: Imported.entity(),
         sortDescriptors: [
@@ -72,152 +38,99 @@ struct HomeView: View {
     )
     private var importedApps: FetchedResults<Imported>
 
-    // MARK: Filtered Apps
+    // MARK: Derived
 
-    private var filteredSignedApps: [Signed] {
-        signedApps.filter { app in
-            searchText.isEmpty ||
-            (app.name?.localizedCaseInsensitiveContains(searchText) ?? false)
+    private var categories: [String] {
+        var list = ["الكل"]
+        for app in storeManager.apps where !app.category.isEmpty {
+            if !list.contains(app.category) {
+                list.append(app.category)
+            }
         }
+        return list
     }
 
-    private var filteredImportedApps: [Imported] {
-        importedApps.filter { app in
-            searchText.isEmpty ||
-            (app.name?.localizedCaseInsensitiveContains(searchText) ?? false)
+    private var visibleApps: [StoreApp] {
+        storeManager.filtered(searchText).filter { app in
+            selectedCategory == "الكل" || app.category == selectedCategory
         }
     }
 
     // MARK: Body
 
     var body: some View {
-        NBNavigationView(.localized("الرئيسية")) {
+        NBNavigationView(.localized("المتجر")) {
 
             VStack(spacing: 0) {
 
-                // MARK: App Type Picker
+                // MARK: Categories (تحت البحث)
 
-                Picker(
-                    "",
-                    selection: $selectedTab
-                ) {
-                    Text(
-                        .localized("التطبيقات")
-                    )
-                    .tag(0)
+                if categories.count > 1 {
 
-                    Text(
-                        .localized("الموقعة")
-                    )
-                    .tag(1)
+                    ScrollView(.horizontal, showsIndicators: false) {
 
-                    Text(
-                        .localized("المتجر")
-                    )
-                    .tag(2)
+                        HStack(spacing: 8) {
+
+                            ForEach(categories, id: \.self) { category in
+
+                                Button {
+                                    withAnimation(.snappy) {
+                                        selectedCategory = category
+                                    }
+                                } label: {
+
+                                    Text(category)
+                                        .font(.subheadline.weight(.semibold))
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 7)
+                                        .background(
+                                            Capsule()
+                                                .fill(
+                                                    selectedCategory == category
+                                                    ? Color.accentColor
+                                                    : Color.secondary.opacity(0.15)
+                                                )
+                                        )
+                                        .foregroundStyle(
+                                            selectedCategory == category
+                                            ? Color.white
+                                            : Color.primary
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 10)
+                    }
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
 
                 // MARK: Apps List
 
-                NBListAdaptable {
+                List {
 
-                    if selectedTab == 2 {
+                    ForEach(visibleApps) { app in
 
-                        // MARK: Store Section
-
-                        NBSection(
-                            .localized("المتجر"),
-                            secondary: storeManager.filtered(searchText).count.description
-                        ) {
-
-                            ForEach(
-                                storeManager.filtered(searchText)
-                            ) { app in
-
-                                StoreCellView(
-                                    app: app,
-                                    onDownloadStarted: { download in
-                                        watchStoreDownload(
-                                            download,
-                                            app: app
-                                        )
-                                    }
-                                )
-                            }
+                        Button {
+                            selectedApp = app
+                        } label: {
+                            StoreCellView(app: app)
                         }
-
-                    } else if selectedTab == 0 {
-
-                        NBSection(
-                            .localized("التطبيقات"),
-                            secondary: filteredImportedApps.count.description
-                        ) {
-
-                            ForEach(
-                                filteredImportedApps,
-                                id: \.uuid
-                            ) { app in
-
-                                LibraryCellView(
-                                    app: app,
-                                    selectedInfoAppPresenting: $selectedInfoAppPresenting,
-                                    selectedSigningAppPresenting: $selectedSigningAppPresenting,
-                                    selectedInstallAppPresenting: $selectedInstallAppPresenting,
-                                    selectedAppDylibsPresenting: $selectedAppDylibsPresenting,
-                                    selectedApps: $selectedApps
-                                )
-                                .compatMatchedTransitionSource(
-                                    id: app.uuid ?? "",
-                                    ns: namespace
-                                )
-                            }
-                        }
-
-                    } else {
-
-                        NBSection(
-                            .localized("التطبيقات الموقعة"),
-                            secondary: filteredSignedApps.count.description
-                        ) {
-
-                            ForEach(
-                                filteredSignedApps,
-                                id: \.uuid
-                            ) { app in
-
-                                LibraryCellView(
-                                    app: app,
-                                    selectedInfoAppPresenting: $selectedInfoAppPresenting,
-                                    selectedSigningAppPresenting: $selectedSigningAppPresenting,
-                                    selectedInstallAppPresenting: $selectedInstallAppPresenting,
-                                    selectedAppDylibsPresenting: $selectedAppDylibsPresenting,
-                                    selectedApps: $selectedApps
-                                )
-                                .compatMatchedTransitionSource(
-                                    id: app.uuid ?? "",
-                                    ns: namespace
-                                )
-                            }
-                        }
+                        .buttonStyle(.plain)
                     }
+                }
+                .listStyle(.plain)
+                .refreshable {
+                    await storeManager.load()
                 }
             }
 
             // MARK: Store Loading
 
             .task {
-
                 if storeManager.apps.isEmpty {
-
                     await storeManager.load()
                 }
-            }
-            .refreshable {
-
-                await storeManager.load()
             }
 
             // MARK: Search
@@ -231,10 +144,7 @@ struct HomeView: View {
 
             .overlay {
 
-                let noImportedApps = filteredImportedApps.isEmpty
-                let noSignedApps = filteredSignedApps.isEmpty
-
-                if noImportedApps && noSignedApps && selectedTab != 2 {
+                if visibleApps.isEmpty, !storeManager.isLoading {
 
                     if #available(iOS 17, *) {
 
@@ -242,377 +152,29 @@ struct HomeView: View {
 
                             Label(
                                 .localized("لا توجد تطبيقات"),
-                                systemImage: "app.badge"
+                                systemImage: "bag"
                             )
 
                         } description: {
 
                             Text(
-                                .localized(
-                                    "ابدأ باستيراد أول ملف IPA إلى KINDA."
-                                )
-                            )
-
-                        } actions: {
-
-                            Menu {
-
-                                importActions()
-
-                            } label: {
-
-                                Text(
-                                    .localized("استيراد")
-                                )
-                                .bg()
-                            }
-                        }
-                    }
-                }
-            }
-
-            // MARK: Toolbar
-
-            .toolbar {
-
-                // زر التعديل
-                ToolbarItem(
-                    placement: .topBarLeading
-                ) {
-
-                    EditButton()
-                }
-
-                // وضع التعديل
-                if isEditMode.isEditing {
-
-                    ToolbarItemGroup(
-                        placement: .topBarTrailing
-                    ) {
-
-                        // Sign
-                        if selectedTab == 0 {
-
-                            Button {
-
-                                isBulkSigningPresenting = true
-
-                            } label: {
-
-                                NBButton(
-                                    .localized("Sign"),
-                                    systemImage: "signature",
-                                    style: .icon
-                                )
-                            }
-                            .disabled(selectedApps.isEmpty)
-
-                        }
-
-                        // Install
-                        else {
-
-                            Button {
-
-                                isBulkInstallingPresenting = true
-
-                            } label: {
-
-                                NBButton(
-                                    .localized("Install"),
-                                    systemImage: "square.and.arrow.down"
-                                )
-                            }
-                            .disabled(selectedApps.isEmpty)
-                        }
-
-                        // Delete
-                        Button {
-
-                            bulkDeleteSelectedApps()
-
-                        } label: {
-
-                            NBButton(
-                                .localized("Delete"),
-                                systemImage: "trash",
-                                style: .icon
+                                .localized("لم يتم إضافة أي تطبيق إلى المتجر بعد.")
                             )
                         }
-                        .disabled(selectedApps.isEmpty)
-                    }
-
-                } else {
-
-                    // إضافة / استيراد تطبيق
-                    NBToolbarMenu(
-                        systemImage: "plus",
-                        style: .icon,
-                        placement: .topBarTrailing
-                    ) {
-
-                        importActions()
                     }
                 }
             }
 
-            // MARK: Edit Mode
+            // MARK: App Detail
 
-            .environment(
-                \.editMode,
-                $isEditMode
-            )
+            .fullScreenCover(item: $selectedApp) { app in
 
-            // MARK: App Info
-
-            .sheet(
-                item: $selectedInfoAppPresenting
-            ) { app in
-
-                LibraryInfoView(
-                    app: app.base
-                )
-            }
-
-            // MARK: Install
-
-            .sheet(
-                item: $selectedInstallAppPresenting
-            ) { app in
-
-                InstallPreviewView(
-                    app: app.base,
-                    isSharing: app.archive
-                )
-                .presentationDetents(
-                    [.height(200)]
-                )
-                .presentationDragIndicator(
-                    .visible
-                )
-            }
-
-            // MARK: Signing
-
-            .fullScreenCover(
-                item: $selectedSigningAppPresenting
-            ) { app in
-
-                SigningView(
-                    app: app.base,
-                    signAndInstall: app.signAndInstall
-                )
-                .compatNavigationTransition(
-                    id: app.base.uuid ?? "",
-                    ns: namespace
-                )
-            }
-
-            // MARK: Dylibs
-
-            .fullScreenCover(
-                item: $selectedAppDylibsPresenting
-            ) { app in
-
-                DylibsView(
-                    app: app.base
-                )
-                .compatNavigationTransition(
-                    id: app.base.uuid ?? "",
-                    ns: namespace
-                )
-            }
-
-            // MARK: Bulk Signing
-
-            .fullScreenCover(
-                isPresented: $isBulkSigningPresenting
-            ) {
-
-                BulkSigningView(
-                    apps: selectedApps.compactMap { id in
-
-                        (
-                            importedApps.first(
-                                where: {
-                                    $0.uuid == id
-                                }
-                            ) as AppInfoPresentable?
-                        )
-                        ??
-                        (
-                            signedApps.first(
-                                where: {
-                                    $0.uuid == id
-                                }
-                            ) as AppInfoPresentable?
-                        )
+                StoreAppDetailView(
+                    app: app,
+                    onDownloadStarted: { download in
+                        watchStoreDownload(download, app: app)
                     }
                 )
-                .compatNavigationTransition(
-                    id: selectedApps.joined(
-                        separator: ","
-                    ),
-                    ns: namespace
-                )
-                .onReceive(
-                    NotificationCenter.default.publisher(
-                        for: NSNotification.Name(
-                            "ksign.bulkSigningFinished"
-                        )
-                    )
-                ) { _ in
-
-                    selectedTab = 1
-                }
-            }
-
-            // MARK: Bulk Installing
-
-            .sheet(
-                isPresented: $isBulkInstallingPresenting
-            ) {
-
-                BulkInstallPreviewView(
-                    apps: selectedApps.compactMap { id in
-
-                        (
-                            importedApps.first(
-                                where: {
-                                    $0.uuid == id
-                                }
-                            ) as AppInfoPresentable?
-                        )
-                        ??
-                        (
-                            signedApps.first(
-                                where: {
-                                    $0.uuid == id
-                                }
-                            ) as AppInfoPresentable?
-                        )
-                    }
-                )
-                .presentationDetents(
-                    [
-                        .medium,
-                        .large
-                    ]
-                )
-                .presentationDragIndicator(
-                    .visible
-                )
-            }
-
-            // MARK: Import IPA
-
-            .sheet(
-                isPresented: $isImportingPresenting
-            ) {
-
-                FileImporterRepresentableView(
-                    allowedContentTypes: [
-                        .ipa,
-                        .tipa
-                    ],
-                    allowsMultipleSelection: true,
-                    onDocumentsPicked: { urls in
-
-                        guard !urls.isEmpty else {
-                            return
-                        }
-
-                        for ipaURL in urls {
-
-                            let id =
-                                "FeatherManualDownload_\(UUID().uuidString)"
-
-                            let download =
-                                downloadManager.startArchive(
-                                    from: ipaURL,
-                                    id: id
-                                )
-
-                            downloadManager.handlePachageFile(
-                                url: ipaURL,
-                                dl: download
-                            ) { error in
-
-                                if error != nil {
-
-                                    UIAlertController.showAlertWithOk(
-                                        title: .localized("Error"),
-                                        message: .localized(
-                                            "Whoops!, something went wrong when extracting the file. \nMaybe try switching the extraction library in the settings?"
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                )
-            }
-
-            // MARK: Import From URL
-
-            .alert(
-                .localized("Import from URL"),
-                isPresented: $isDownloadingPresenting
-            ) {
-
-                TextField(
-                    .localized("URL"),
-                    text: $alertDownloadString
-                )
-
-                Button(
-                    .localized("Cancel"),
-                    role: .cancel
-                ) {
-
-                    alertDownloadString = ""
-                }
-
-                Button(
-                    .localized("OK")
-                ) {
-
-                    guard
-                        let url = URL(
-                            string: alertDownloadString
-                        )
-                    else {
-                        return
-                    }
-
-                    _ = downloadManager.startDownload(
-                        from: url,
-                        id:
-                            "FeatherManualDownload_\(UUID().uuidString)"
-                    )
-
-                    alertDownloadString = ""
-                }
-
-            }
-
-            // MARK: Sign & Install Notification
-
-            .onReceive(
-                NotificationCenter.default.publisher(
-                    for: NSNotification.Name(
-                        "feather.installApp"
-                    )
-                )
-            ) { _ in
-
-                if let app = signedApps.first {
-
-                    selectedInstallAppPresenting =
-                        AnyApp(
-                            base: app
-                        )
-                }
             }
         }
 
@@ -623,24 +185,6 @@ struct HomeView: View {
                 task.cancel()
             }
             downloadWatchTasks.removeAll()
-        }
-
-        // MARK: Edit Mode Cleanup
-
-        .onChange(
-            of: isEditMode
-        ) { state in
-
-            if !state.isEditing {
-
-                DispatchQueue.main.async {
-
-                    withAnimation {
-
-                        selectedApps.removeAll()
-                    }
-                }
-            }
         }
     }
 }
@@ -665,9 +209,6 @@ extension HomeView {
 
             while !Task.isCancelled {
                 if let currentDownload = DownloadManager.shared.getDownload(by: downloadID) {
-                    // 1.0 تعني أن ملف IPA وصل بالكامل.
-                    // بعد ذلك DownloadManager يستدعي handlePachageFile ويزيل
-                    // العنصر فقط بعد انتهاء معالجة/استيراد الملف.
                     if currentDownload.totalBytes > 0,
                        currentDownload.progress >= 0.999 {
                         reachedDownloadCompletion = true
@@ -676,24 +217,15 @@ extension HomeView {
                     break
                 }
 
-                try? await Task.sleep(
-                    nanoseconds: 300_000_000
-                )
+                try? await Task.sleep(nanoseconds: 300_000_000)
             }
 
-            guard !Task.isCancelled else {
-                return
-            }
+            guard !Task.isCancelled else { return }
 
-            // نعطي Core Data دورة صغيرة حتى يصل Imported إلى FetchedResults.
-            try? await Task.sleep(
-                nanoseconds: 500_000_000
-            )
+            try? await Task.sleep(nanoseconds: 500_000_000)
 
             let importedSuccessfully = importedApps.contains { imported in
-                guard let name = imported.name else {
-                    return false
-                }
+                guard let name = imported.name else { return false }
                 return name.localizedCaseInsensitiveCompare(app.name) == .orderedSame
             }
 
@@ -703,17 +235,9 @@ extension HomeView {
             guard reachedDownloadCompletion || importedSuccessfully else {
                 UIAlertController.showAlertWithOk(
                     title: .localized("Error"),
-                    message: .localized(
-                        "The IPA download or import could not be completed."
-                    )
+                    message: .localized("The IPA download or import could not be completed.")
                 )
                 return
-            }
-
-            // ننتقل أولاً إلى قسم التطبيقات داخل HomeView.
-            // ثم نرسل حدثاً للـ Tabbar الخارجي حتى يفتح تبويب المكتبة فعلياً.
-            withAnimation(.smooth) {
-                selectedTab = 0
             }
 
             NotificationCenter.default.post(
@@ -725,82 +249,6 @@ extension HomeView {
         downloadWatchTasks[downloadID] = task
     }
 }
-
-// MARK: - Import Actions
-
-extension HomeView {
-
-    @ViewBuilder
-    private func importActions() -> some View {
-
-        Button(
-            .localized("Import from Files"),
-            systemImage: "folder"
-        ) {
-
-            isImportingPresenting = true
-        }
-
-        Button(
-            .localized("Import from URL"),
-            systemImage: "globe"
-        ) {
-
-            isDownloadingPresenting = true
-        }
-    }
-}
-
-// MARK: - Bulk Delete
-
-extension HomeView {
-
-    private func bulkDeleteSelectedApps() {
-
-        let appsToDelete = selectedApps
-
-        withAnimation(
-            .easeInOut(
-                duration: 0.5
-            )
-        ) {
-
-            for appUUID in appsToDelete {
-
-                if let signedApp =
-                    signedApps.first(
-                        where: {
-                            $0.uuid == appUUID
-                        }
-                    ) {
-
-                    Storage.shared.deleteApp(
-                        for: signedApp
-                    )
-
-                } else if let importedApp =
-                            importedApps.first(
-                                where: {
-                                    $0.uuid == appUUID
-                                }
-                            ) {
-
-                    Storage.shared.deleteApp(
-                        for: importedApp
-                    )
-                }
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.3
-        ) {
-
-            selectedApps.removeAll()
-        }
-    }
-}
-
 
 // MARK: - Store Model (Lovable Cloud)
 
@@ -814,6 +262,7 @@ struct StoreApp: Identifiable, Decodable, Hashable {
     let category: String
     let iconURL: String
     let ipaURL: String
+    let sizeMB: Double?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -824,6 +273,19 @@ struct StoreApp: Identifiable, Decodable, Hashable {
         case category
         case iconURL = "icon_url"
         case ipaURL = "ipa_url"
+        case sizeMB = "size_mb"
+    }
+
+    /// نص الحجم جاهز للعرض (MB أو GB) — يرجع nil إن لم يُضف حجم.
+    var sizeText: String? {
+
+        guard let sizeMB, sizeMB > 0 else { return nil }
+
+        if sizeMB >= 1024 {
+            return String(format: "%.2f GB", sizeMB / 1024)
+        }
+
+        return String(format: "%.0f MB", sizeMB)
     }
 }
 
@@ -846,9 +308,7 @@ final class KindaStoreManager: ObservableObject {
 
     func filtered(_ searchText: String) -> [StoreApp] {
 
-        guard !searchText.isEmpty else {
-            return apps
-        }
+        guard !searchText.isEmpty else { return apps }
 
         return apps.filter {
             $0.name.localizedCaseInsensitiveContains(searchText)
@@ -861,17 +321,13 @@ final class KindaStoreManager: ObservableObject {
         isLoading = true
         errorMessage = nil
 
-        defer {
-            isLoading = false
-        }
+        defer { isLoading = false }
 
         guard
             let url = URL(
                 string: "\(baseURL)/rest/v1/store_apps?select=*&order=created_at.desc"
             )
-        else {
-            return
-        }
+        else { return }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -880,12 +336,9 @@ final class KindaStoreManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         do {
-
             let (data, _) = try await URLSession.shared.data(for: request)
             apps = try JSONDecoder().decode([StoreApp].self, from: data)
-
         } catch {
-
             errorMessage = error.localizedDescription
         }
     }
@@ -896,46 +349,25 @@ final class KindaStoreManager: ObservableObject {
 struct StoreCellView: View {
 
     let app: StoreApp
-    let onDownloadStarted: (Download) -> Void
-
-    @StateObject private var downloadManager = DownloadManager.shared
-    @State private var activeDownloadID: String?
 
     var body: some View {
 
         HStack(spacing: 12) {
 
-            AsyncImage(
-                url: URL(string: app.iconURL)
-            ) { image in
+            StoreIconView(urlString: app.iconURL, size: 56)
 
-                image
-                    .resizable()
-                    .scaledToFill()
-
-            } placeholder: {
-
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.secondary.opacity(0.2))
-            }
-            .frame(width: 52, height: 52)
-            .clipShape(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
 
                 Text(app.name)
                     .font(.headline)
                     .lineLimit(1)
 
-                Text("\(app.category) • \(app.version)")
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 if !app.appDescription.isEmpty {
-
                     Text(app.appDescription)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -945,34 +377,199 @@ struct StoreCellView: View {
 
             Spacer()
 
-            Button {
+            Image(systemName: "chevron.forward")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+    }
 
-                download()
+    private var subtitle: String {
+        var parts = [app.category, "v\(app.version)"]
+        if let size = app.sizeText { parts.append(size) }
+        return parts.filter { !$0.isEmpty }.joined(separator: " • ")
+    }
+}
 
-            } label: {
+// MARK: - Store Icon
 
-                if activeDownloadID != nil {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.title2)
+struct StoreIconView: View {
+
+    let urlString: String
+    let size: CGFloat
+
+    var body: some View {
+
+        AsyncImage(url: URL(string: urlString)) { image in
+
+            image
+                .resizable()
+                .scaledToFill()
+
+        } placeholder: {
+
+            RoundedRectangle(cornerRadius: size / 4.5, style: .continuous)
+                .fill(Color.secondary.opacity(0.2))
+        }
+        .frame(width: size, height: size)
+        .clipShape(
+            RoundedRectangle(cornerRadius: size / 4.5, style: .continuous)
+        )
+    }
+}
+
+// MARK: - App Detail Screen
+
+struct StoreAppDetailView: View {
+
+    let app: StoreApp
+    let onDownloadStarted: (Download) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var downloadManager = DownloadManager.shared
+    @State private var activeDownloadID: String?
+
+    var body: some View {
+
+        NavigationView {
+
+            ScrollView {
+
+                VStack(alignment: .leading, spacing: 22) {
+
+                    // رأس التطبيق
+                    HStack(alignment: .center, spacing: 16) {
+
+                        StoreIconView(urlString: app.iconURL, size: 96)
+
+                        VStack(alignment: .leading, spacing: 6) {
+
+                            Text(app.name)
+                                .font(.title2.bold())
+                                .lineLimit(2)
+
+                            Text(app.category)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            installButton
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+
+                    // معلومات سريعة
+                    HStack(spacing: 0) {
+
+                        infoItem(title: .localized("الإصدار"), value: app.version)
+
+                        Divider().frame(height: 34)
+
+                        infoItem(
+                            title: .localized("الحجم"),
+                            value: app.sizeText ?? "—"
+                        )
+
+                        Divider().frame(height: 34)
+
+                        infoItem(title: .localized("الفئة"), value: app.category)
+                    }
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.secondary.opacity(0.10))
+                    )
+
+                    // الوصف
+                    if !app.appDescription.isEmpty {
+
+                        VStack(alignment: .leading, spacing: 8) {
+
+                            Text(.localized("الوصف"))
+                                .font(.headline)
+
+                            Text(app.appDescription)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    // معرّف الحزمة
+                    VStack(alignment: .leading, spacing: 8) {
+
+                        Text(.localized("معرّف الحزمة"))
+                            .font(.headline)
+
+                        Text(app.bundleId)
+                            .font(.callout.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding()
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(.localized("إغلاق")) {
+                        dismiss()
+                    }
                 }
             }
-            .buttonStyle(.plain)
-            .disabled(activeDownloadID != nil)
         }
-        .padding(.vertical, 4)
         .onReceive(downloadManager.$downloads) { downloads in
             guard let activeDownloadID else { return }
-
             if downloads.contains(where: { $0.id == activeDownloadID }) == false {
                 self.activeDownloadID = nil
             }
         }
     }
 
-    private func download() {
+    // MARK: Install Button
+
+    private var installButton: some View {
+
+        Button {
+            install()
+        } label: {
+
+            Group {
+                if activeDownloadID != nil {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Text(.localized("تثبيت"))
+                        .font(.subheadline.weight(.bold))
+                }
+            }
+            .frame(minWidth: 92)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .background(Capsule().fill(Color.accentColor))
+            .foregroundStyle(Color.white)
+        }
+        .buttonStyle(.plain)
+        .disabled(activeDownloadID != nil)
+    }
+
+    private func infoItem(title: String, value: String) -> some View {
+
+        VStack(spacing: 4) {
+
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Text(value.isEmpty ? "—" : value)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: Install Action
+
+    private func install() {
 
         guard
             let url = URL(string: app.ipaURL),
