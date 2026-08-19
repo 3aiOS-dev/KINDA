@@ -14,6 +14,7 @@ struct HomeView: View {
 
     // MARK: Managers
     @StateObject private var downloadManager = DownloadManager.shared
+    @StateObject private var storeManager = KindaStoreManager.shared
 
     // MARK: Presenting
     @State private var selectedInfoAppPresenting: AnyApp?
@@ -32,6 +33,7 @@ struct HomeView: View {
 
     // 0 = التطبيقات المستوردة
     // 1 = التطبيقات الموقعة
+    // 2 = المتجر (Lovable Cloud)
     @State private var selectedTab = 0
 
     // MARK: Edit Mode
@@ -104,6 +106,11 @@ struct HomeView: View {
                         .localized("الموقعة")
                     )
                     .tag(1)
+
+                    Text(
+                        .localized("المتجر")
+                    )
+                    .tag(2)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -113,7 +120,26 @@ struct HomeView: View {
 
                 NBListAdaptable {
 
-                    if selectedTab == 0 {
+                    if selectedTab == 2 {
+
+                        // MARK: Store Section
+
+                        NBSection(
+                            .localized("المتجر"),
+                            secondary: storeManager.filtered(searchText).count.description
+                        ) {
+
+                            ForEach(
+                                storeManager.filtered(searchText)
+                            ) { app in
+
+                                StoreCellView(
+                                    app: app
+                                )
+                            }
+                        }
+
+                    } else if selectedTab == 0 {
 
                         NBSection(
                             .localized("التطبيقات"),
@@ -170,6 +196,20 @@ struct HomeView: View {
                 }
             }
 
+            // MARK: Store Loading
+
+            .task {
+
+                if storeManager.apps.isEmpty {
+
+                    await storeManager.load()
+                }
+            }
+            .refreshable {
+
+                await storeManager.load()
+            }
+
             // MARK: Search
 
             .searchable(
@@ -184,7 +224,7 @@ struct HomeView: View {
                 let noImportedApps = filteredImportedApps.isEmpty
                 let noSignedApps = filteredSignedApps.isEmpty
 
-                if noImportedApps && noSignedApps {
+                if noImportedApps && noSignedApps && selectedTab != 2 {
 
                     if #available(iOS 17, *) {
 
@@ -658,5 +698,176 @@ extension HomeView {
 
             selectedApps.removeAll()
         }
+    }
+}
+
+
+// MARK: - Store Model (Lovable Cloud)
+
+struct StoreApp: Identifiable, Decodable, Hashable {
+
+    let id: String
+    let name: String
+    let version: String
+    let bundleId: String
+    let appDescription: String
+    let category: String
+    let iconURL: String
+    let ipaURL: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case version
+        case bundleId = "bundle_id"
+        case appDescription = "description"
+        case category
+        case iconURL = "icon_url"
+        case ipaURL = "ipa_url"
+    }
+}
+
+// MARK: - Store Manager
+
+@MainActor
+final class KindaStoreManager: ObservableObject {
+
+    static let shared = KindaStoreManager()
+
+    // بيانات الاتصال بلوحة التحكم (Lovable Cloud)
+    private let baseURL = "https://ibskoyypugseeixzntyt.supabase.co"
+    private let apiKey = "sb_publishable_McRq3FTx_r7pL2PbGk8YBA_mMnJmtFm"
+
+    @Published var apps: [StoreApp] = []
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+
+    private init() {}
+
+    func filtered(_ searchText: String) -> [StoreApp] {
+
+        guard !searchText.isEmpty else {
+            return apps
+        }
+
+        return apps.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+            || $0.bundleId.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    func load() async {
+
+        isLoading = true
+        errorMessage = nil
+
+        defer {
+            isLoading = false
+        }
+
+        guard
+            let url = URL(
+                string: "\(baseURL)/rest/v1/store_apps?select=*&order=created_at.desc"
+            )
+        else {
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue(apiKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+
+            let (data, _) = try await URLSession.shared.data(for: request)
+            apps = try JSONDecoder().decode([StoreApp].self, from: data)
+
+        } catch {
+
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Store Cell
+
+struct StoreCellView: View {
+
+    let app: StoreApp
+
+    @StateObject private var downloadManager = DownloadManager.shared
+
+    var body: some View {
+
+        HStack(spacing: 12) {
+
+            AsyncImage(
+                url: URL(string: app.iconURL)
+            ) { image in
+
+                image
+                    .resizable()
+                    .scaledToFill()
+
+            } placeholder: {
+
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.secondary.opacity(0.2))
+            }
+            .frame(width: 52, height: 52)
+            .clipShape(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+
+                Text(app.name)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                Text("\(app.category) • \(app.version)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                if !app.appDescription.isEmpty {
+
+                    Text(app.appDescription)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer()
+
+            Button {
+
+                download()
+
+            } label: {
+
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.title2)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func download() {
+
+        guard
+            let url = URL(string: app.ipaURL)
+        else {
+            return
+        }
+
+        _ = downloadManager.startDownload(
+            from: url,
+            id: "KindaStore_\(app.id)"
+        )
     }
 }
