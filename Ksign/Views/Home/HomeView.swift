@@ -1,8 +1,6 @@
 //
 //  HomeView.swift
-//  Ksign
-//
-//  Created for KINDA
+//  KINDA
 //
 
 import SwiftUI
@@ -13,41 +11,33 @@ struct HomeView: View {
 
     // MARK: - Managers
 
-    @StateObject private var downloadManager = DownloadManager.shared
+    @StateObject var downloadManager = DownloadManager.shared
 
-    // MARK: - State
+    // MARK: - Home State
 
-    @State private var searchText = ""
-    @State private var selectedApps: Set<String> = []
-    @State private var editMode: EditMode = .inactive
+    @State private var _searchText = ""
 
-    @State private var isImporting = false
-    @State private var isDownloading = false
-    @State private var downloadURL = ""
+    @State private var _selectedInfoAppPresenting: AnyApp?
+    @State private var _selectedSigningAppPresenting: AnyApp?
+    @State private var _selectedInstallAppPresenting: AnyApp?
+    @State private var _selectedAppDylibsPresenting: AnyApp?
 
-    @State private var selectedInfoAppPresenting: AnyApp?
-    @State private var selectedSigningAppPresenting: AnyApp?
-    @State private var selectedInstallAppPresenting: AnyApp?
-    @State private var selectedDylibsAppPresenting: AnyApp?
+    @State private var _isBulkSigningPresenting = false
+    @State private var _isBulkInstallingPresenting = false
 
-    @State private var isBulkSigningPresenting = false
-    @State private var isBulkInstallingPresenting = false
+    @State private var _isImportingPresenting = false
+    @State private var _isDownloadingPresenting = false
 
-    @Namespace private var namespace
+    @State private var _alertDownloadString = ""
 
-    // MARK: - Core Data
+    // MARK: - Edit Mode
 
-    @FetchRequest(
-        entity: Imported.entity(),
-        sortDescriptors: [
-            NSSortDescriptor(
-                keyPath: \Imported.date,
-                ascending: false
-            )
-        ],
-        animation: .snappy
-    )
-    private var importedApps: FetchedResults<Imported>
+    @State private var _isEditMode: EditMode = .inactive
+    @State private var _selectedApps: Set<String> = []
+
+    @Namespace private var _namespace
+
+    // MARK: - Fetch
 
     @FetchRequest(
         entity: Signed.entity(),
@@ -59,268 +49,373 @@ struct HomeView: View {
         ],
         animation: .snappy
     )
-    private var signedApps: FetchedResults<Signed>
+    private var _signedApps: FetchedResults<Signed>
+
+    @FetchRequest(
+        entity: Imported.entity(),
+        sortDescriptors: [
+            NSSortDescriptor(
+                keyPath: \Imported.date,
+                ascending: false
+            )
+        ],
+        animation: .snappy
+    )
+    private var _importedApps: FetchedResults<Imported>
 
     // MARK: - Filtered Apps
 
-    private var filteredImportedApps: [Imported] {
-        if searchText.isEmpty {
-            return Array(importedApps)
-        }
-
-        return importedApps.filter {
-            ($0.value(forKey: "name") as? String)?
-                .localizedCaseInsensitiveContains(searchText) == true
+    private var _filteredSignedApps: [Signed] {
+        _signedApps.filter {
+            _searchText.isEmpty ||
+            (($0.value(forKey: "name") as? String)?
+                .localizedCaseInsensitiveContains(_searchText) ?? false)
         }
     }
 
-    private var filteredSignedApps: [Signed] {
-        if searchText.isEmpty {
-            return Array(signedApps)
-        }
-
-        return signedApps.filter {
-            ($0.value(forKey: "name") as? String)?
-                .localizedCaseInsensitiveContains(searchText) == true
+    private var _filteredImportedApps: [Imported] {
+        _importedApps.filter {
+            _searchText.isEmpty ||
+            (($0.value(forKey: "name") as? String)?
+                .localizedCaseInsensitiveContains(_searchText) ?? false)
         }
     }
 
-    private var allAppsCount: Int {
-        importedApps.count + signedApps.count
+    private var _appsCount: Int {
+        _importedApps.count + _signedApps.count
     }
 
     // MARK: - Body
 
     var body: some View {
+
         NBNavigationView(.localized("Home")) {
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+
+                VStack(
+                    alignment: .leading,
+                    spacing: 20
+                ) {
 
                     // MARK: Banner
 
-                    homeBanner
+                    _homeBanner
 
                     // MARK: Quick Actions
 
-                    quickActions
+                    _quickActions
 
                     // MARK: Applications
 
-                    applicationsSection
+                    _applicationsSection
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 30)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+            .background(
+                Color(uiColor: .systemGroupedBackground)
+            )
             .searchable(
-                text: $searchText,
+                text: $_searchText,
                 placement: .platform(),
                 prompt: .localized("Search")
             )
+
+            // MARK: Toolbar
+
             .toolbar {
 
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(
+                    placement: .topBarLeading
+                ) {
                     EditButton()
                 }
 
-                ToolbarItem(placement: .topBarTrailing) {
+                if _isEditMode.isEditing {
 
-                    if editMode.isEditing {
+                    ToolbarItemGroup(
+                        placement: .topBarTrailing
+                    ) {
 
-                        Menu {
-
-                            Button {
-                                selectAllApps()
-                            } label: {
-                                Label(
-                                    .localized("Select All"),
-                                    systemImage: "checklist"
-                                )
-                            }
-
-                            Button(
-                                role: .destructive
-                            ) {
-                                deleteSelectedApps()
-                            } label: {
-                                Label(
-                                    .localized("Delete"),
-                                    systemImage: "trash"
-                                )
-                            }
-                            .disabled(selectedApps.isEmpty)
-
+                        Button {
+                            _selectAllApps()
                         } label: {
-                            Image(systemName: "ellipsis.circle")
+                            Image(systemName: "checklist")
                         }
 
-                    } else {
-
-                        Menu {
-                            importActions
+                        Button {
+                            _bulkDeleteSelectedApps()
                         } label: {
-                            Image(systemName: "plus")
+                            Image(systemName: "trash")
+                        }
+                        .disabled(
+                            _selectedApps.isEmpty
+                        )
+                    }
+
+                } else {
+
+                    ToolbarItem(
+                        placement: .topBarTrailing
+                    ) {
+
+                        NBToolbarMenu(
+                            systemImage: "plus",
+                            style: .icon,
+                            placement: .topBarTrailing
+                        ) {
+                            _importActions()
                         }
                     }
                 }
             }
-            .environment(\.editMode, $editMode)
+
+            .environment(
+                \.editMode,
+                $_isEditMode
+            )
 
             // MARK: App Info
 
-            .sheet(item: $selectedInfoAppPresenting) { app in
-                LibraryInfoView(app: app.base)
+            .sheet(
+                item: $_selectedInfoAppPresenting
+            ) { app in
+
+                LibraryInfoView(
+                    app: app.base
+                )
             }
 
             // MARK: Install
 
-            .sheet(item: $selectedInstallAppPresenting) { app in
+            .sheet(
+                item: $_selectedInstallAppPresenting
+            ) { app in
+
                 InstallPreviewView(
                     app: app.base,
                     isSharing: app.archive
                 )
-                .presentationDetents([.height(200)])
-                .presentationDragIndicator(.visible)
+                .presentationDetents(
+                    [.height(200)]
+                )
+                .presentationDragIndicator(
+                    .visible
+                )
             }
 
             // MARK: Signing
 
             .fullScreenCover(
-                item: $selectedSigningAppPresenting
+                item: $_selectedSigningAppPresenting
             ) { app in
+
                 SigningView(
                     app: app.base,
                     signAndInstall: app.signAndInstall
                 )
                 .compatNavigationTransition(
                     id: app.base.uuid ?? "",
-                    ns: namespace
+                    ns: _namespace
                 )
             }
 
             // MARK: Dylibs
 
             .fullScreenCover(
-                item: $selectedDylibsAppPresenting
+                item: $_selectedAppDylibsPresenting
             ) { app in
-                DylibsView(app: app.base)
-                    .compatNavigationTransition(
-                        id: app.base.uuid ?? "",
-                        ns: namespace
-                    )
+
+                DylibsView(
+                    app: app.base
+                )
+                .compatNavigationTransition(
+                    id: app.base.uuid ?? "",
+                    ns: _namespace
+                )
             }
 
             // MARK: Bulk Signing
 
             .fullScreenCover(
-                isPresented: $isBulkSigningPresenting
+                isPresented: $_isBulkSigningPresenting
             ) {
+
                 BulkSigningView(
-                    apps: selectedApps.compactMap { id in
-                        (importedApps.first {
-                            $0.uuid == id
-                        } as AppInfoPresentable?)
+                    apps: _selectedApps.compactMap { id in
+
+                        (_importedApps.first(
+                            where: { $0.uuid == id }
+                        ) as AppInfoPresentable?)
+
                         ??
-                        (signedApps.first {
-                            $0.uuid == id
-                        } as AppInfoPresentable?)
+
+                        (_signedApps.first(
+                            where: { $0.uuid == id }
+                        ) as AppInfoPresentable?)
                     }
                 )
                 .compatNavigationTransition(
-                    id: selectedApps.joined(separator: ","),
-                    ns: namespace
+                    id: _selectedApps.joined(
+                        separator: ","
+                    ),
+                    ns: _namespace
                 )
             }
 
             // MARK: Bulk Install
 
             .sheet(
-                isPresented: $isBulkInstallingPresenting
+                isPresented: $_isBulkInstallingPresenting
             ) {
+
                 BulkInstallPreviewView(
-                    apps: selectedApps.compactMap { id in
-                        (importedApps.first {
-                            $0.uuid == id
-                        } as AppInfoPresentable?)
+                    apps: _selectedApps.compactMap { id in
+
+                        (_importedApps.first(
+                            where: { $0.uuid == id }
+                        ) as AppInfoPresentable?)
+
                         ??
-                        (signedApps.first {
-                            $0.uuid == id
-                        } as AppInfoPresentable?)
+
+                        (_signedApps.first(
+                            where: { $0.uuid == id }
+                        ) as AppInfoPresentable?)
                     }
                 )
-                .presentationDetents([
-                    .medium,
-                    .large
-                ])
-                .presentationDragIndicator(.visible)
+                .presentationDetents(
+                    [.medium, .large]
+                )
+                .presentationDragIndicator(
+                    .visible
+                )
             }
 
             // MARK: File Import
 
-            .sheet(isPresented: $isImporting) {
+            .sheet(
+                isPresented: $_isImportingPresenting
+            ) {
 
                 FileImporterRepresentableView(
                     allowedContentTypes: [
                         .ipa,
                         .tipa
                     ],
-                    allowsMultipleSelection: true
-                ) { urls in
+                    allowsMultipleSelection: true,
+                    onDocumentsPicked: { urls in
 
-                    importIPAFiles(urls)
-                }
+                        guard !urls.isEmpty else {
+                            return
+                        }
+
+                        for ipaURL in urls {
+
+                            let id =
+                                "KindaManualDownload_\(UUID().uuidString)"
+
+                            let dl =
+                                downloadManager.startArchive(
+                                    from: ipaURL,
+                                    id: id
+                                )
+
+                            downloadManager.handlePachageFile(
+                                url: ipaURL,
+                                dl: dl
+                            ) { error in
+
+                                if error != nil {
+
+                                    UIAlertController.showAlertWithOk(
+                                        title: .localized("Error"),
+                                        message: .localized(
+                                            "Whoops!, something went wrong when extracting the file."
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
             }
 
             // MARK: URL Import
 
             .alert(
                 .localized("Import from URL"),
-                isPresented: $isDownloading
+                isPresented: $_isDownloadingPresenting
             ) {
 
                 TextField(
                     .localized("URL"),
-                    text: $downloadURL
+                    text: $_alertDownloadString
                 )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
 
                 Button(
                     .localized("Cancel"),
                     role: .cancel
                 ) {
-                    downloadURL = ""
+
+                    _alertDownloadString = ""
                 }
 
-                Button(.localized("OK")) {
-                    importFromURL()
+                Button(
+                    .localized("OK")
+                ) {
+
+                    guard
+                        let url = URL(
+                            string: _alertDownloadString
+                        )
+                    else {
+                        return
+                    }
+
+                    _ = downloadManager.startDownload(
+                        from: url,
+                        id:
+                            "KindaManualDownload_\(UUID().uuidString)"
+                    )
+
+                    _alertDownloadString = ""
                 }
             }
 
-            // MARK: Installation Notification
+            // MARK: Install Notification
 
             .onReceive(
                 NotificationCenter.default.publisher(
-                    for: NSNotification.Name("feather.installApp")
+                    for:
+                        NSNotification.Name(
+                            "feather.installApp"
+                        )
                 )
             ) { _ in
 
-                if let app = signedApps.first {
-                    selectedInstallAppPresenting = AnyApp(
-                        base: app
-                    )
+                if let app = _signedApps.first {
+
+                    _selectedInstallAppPresenting =
+                        AnyApp(
+                            base: app
+                        )
                 }
             }
 
             // MARK: Edit Mode
 
-            .onChange(of: editMode) { state in
+            .onChange(
+                of: _isEditMode
+            ) { state in
 
                 if !state.isEditing {
 
                     DispatchQueue.main.async {
+
                         withAnimation {
-                            selectedApps.removeAll()
+
+                            _selectedApps.removeAll()
                         }
                     }
                 }
@@ -328,53 +423,81 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Banner
+    // MARK: - Home Banner
 
-    private var homeBanner: some View {
+    private var _homeBanner: some View {
 
-        ZStack(alignment: .bottomLeading) {
+        ZStack(
+            alignment: .bottomLeading
+        ) {
 
-            RoundedRectangle(cornerRadius: 24)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.accentColor.opacity(0.95),
-                            Color.accentColor.opacity(0.55)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+            RoundedRectangle(
+                cornerRadius: 24
+            )
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.accentColor.opacity(0.95),
+                        Color.accentColor.opacity(0.55)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-                .frame(height: 190)
+            )
+            .frame(
+                height: 190
+            )
 
             VStack(
                 alignment: .leading,
                 spacing: 8
             ) {
 
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.white)
-
-                Text(.localized("Welcome"))
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(.white)
-
-                Text(.localized("Your Apps In One Place"))
-                    .font(.headline)
-                    .foregroundStyle(.white.opacity(0.9))
+                Image(
+                    systemName:
+                        "square.grid.2x2.fill"
+                )
+                .font(
+                    .system(
+                        size: 34,
+                        weight: .semibold
+                    )
+                )
+                .foregroundStyle(.white)
 
                 Text(
-                    "\(allAppsCount) " +
+                    .localized("Welcome")
+                )
+                .font(
+                    .largeTitle.bold()
+                )
+                .foregroundStyle(.white)
+
+                Text(
+                    .localized(
+                        "Your Apps In One Place"
+                    )
+                )
+                .font(.headline)
+                .foregroundStyle(
+                    .white.opacity(0.9)
+                )
+
+                Text(
+                    "\(self._appsCount) " +
                     .localized("Apps")
                 )
                 .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(
+                    .white.opacity(0.8)
+                )
             }
             .padding(22)
         }
         .clipShape(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(
+                cornerRadius: 24
+            )
         )
         .shadow(
             color: .black.opacity(0.08),
@@ -385,61 +508,68 @@ struct HomeView: View {
 
     // MARK: - Quick Actions
 
-    private var quickActions: some View {
+    private var _quickActions: some View {
 
         HStack(spacing: 12) {
 
-            quickAction(
+            _quickAction(
                 title: .localized("Import"),
                 icon: "square.and.arrow.down"
             ) {
-                isImporting = true
+                _isImportingPresenting = true
             }
 
-            quickAction(
+            _quickAction(
                 title: .localized("From URL"),
                 icon: "link"
             ) {
-                isDownloading = true
+                _isDownloadingPresenting = true
             }
 
-            quickAction(
+            _quickAction(
                 title: .localized("Library"),
                 icon: "square.grid.2x2"
             ) {
                 NotificationCenter.default.post(
-                    name: NSNotification.Name(
-                        "kinda.openLibrary"
-                    ),
+                    name:
+                        NSNotification.Name(
+                            "kinda.openLibrary"
+                        ),
                     object: nil
                 )
             }
         }
     }
 
-    private func quickAction(
+    private func _quickAction(
         title: String,
         icon: String,
         action: @escaping () -> Void
     ) -> some View {
 
-        Button(action: action) {
+        Button(
+            action: action
+        ) {
 
             VStack(spacing: 8) {
 
-                Image(systemName: icon)
-                    .font(
-                        .system(
-                            size: 20,
-                            weight: .semibold
-                        )
+                Image(
+                    systemName: icon
+                )
+                .font(
+                    .system(
+                        size: 20,
+                        weight: .semibold
                     )
+                )
 
                 Text(title)
                     .font(.caption)
                     .fontWeight(.medium)
             }
-            .frame(maxWidth: .infinity)
+            .frame(
+                maxWidth: .infinity
+            )
             .frame(height: 70)
             .background(
                 Color(
@@ -458,7 +588,7 @@ struct HomeView: View {
 
     // MARK: - Applications
 
-    private var applicationsSection: some View {
+    private var _applicationsSection: some View {
 
         VStack(
             alignment: .leading,
@@ -467,89 +597,140 @@ struct HomeView: View {
 
             HStack {
 
-                Text(.localized("Applications"))
-                    .font(.title2.bold())
+                Text(
+                    .localized("Applications")
+                )
+                .font(.title2.bold())
 
                 Spacer()
 
-                Text("\(allAppsCount)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "\(self._appsCount)"
+                )
+                .font(.subheadline)
+                .foregroundStyle(
+                    .secondary
+                )
             }
 
-            if filteredImportedApps.isEmpty &&
-                filteredSignedApps.isEmpty {
+            if
+                _filteredImportedApps.isEmpty,
+                _filteredSignedApps.isEmpty
+            {
 
-                emptyAppsView
+                _emptyAppsView
 
             } else {
 
-                LazyVStack(spacing: 10) {
+                LazyVStack(
+                    spacing: 10
+                ) {
 
-                    ForEach(
-                        filteredImportedApps,
-                        id: \.uuid
-                    ) { app in
+                    if !_filteredImportedApps.isEmpty {
 
-                        applicationRow(
-                            app
-                        )
+                        NBSection(
+                            .localized(
+                                "Downloaded Apps"
+                            ),
+                            secondary:
+                                _filteredImportedApps
+                                    .count
+                                    .description
+                        ) {
+
+                            ForEach(
+                                _filteredImportedApps,
+                                id: \.uuid
+                            ) { app in
+
+                                LibraryCellView(
+                                    app: app,
+                                    selectedInfoAppPresenting:
+                                        $_selectedInfoAppPresenting,
+                                    selectedSigningAppPresenting:
+                                        $_selectedSigningAppPresenting,
+                                    selectedInstallAppPresenting:
+                                        $_selectedInstallAppPresenting,
+                                    selectedAppDylibsPresenting:
+                                        $_selectedAppDylibsPresenting,
+                                    selectedApps:
+                                        $_selectedApps
+                                )
+                                .compatMatchedTransitionSource(
+                                    id: app.uuid ?? "",
+                                    ns: _namespace
+                                )
+                            }
+                        }
                     }
 
-                    ForEach(
-                        filteredSignedApps,
-                        id: \.uuid
-                    ) { app in
+                    if !_filteredSignedApps.isEmpty {
 
-                        applicationRow(
-                            app
-                        )
+                        NBSection(
+                            .localized(
+                                "Signed Apps"
+                            ),
+                            secondary:
+                                _filteredSignedApps
+                                    .count
+                                    .description
+                        ) {
+
+                            ForEach(
+                                _filteredSignedApps,
+                                id: \.uuid
+                            ) { app in
+
+                                LibraryCellView(
+                                    app: app,
+                                    selectedInfoAppPresenting:
+                                        $_selectedInfoAppPresenting,
+                                    selectedSigningAppPresenting:
+                                        $_selectedSigningAppPresenting,
+                                    selectedInstallAppPresenting:
+                                        $_selectedInstallAppPresenting,
+                                    selectedAppDylibsPresenting:
+                                        $_selectedAppDylibsPresenting,
+                                    selectedApps:
+                                        $_selectedApps
+                                )
+                                .compatMatchedTransitionSource(
+                                    id: app.uuid ?? "",
+                                    ns: _namespace
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    // MARK: - Application Row
-
-    private func applicationRow(
-        _ app: AppInfoPresentable
-    ) -> some View {
-
-        LibraryCellView(
-            app: app,
-            selectedInfoAppPresenting:
-                $selectedInfoAppPresenting,
-            selectedSigningAppPresenting:
-                $selectedSigningAppPresenting,
-            selectedInstallAppPresenting:
-                $selectedInstallAppPresenting,
-            selectedAppDylibsPresenting:
-                $selectedDylibsAppPresenting,
-            selectedApps:
-                $selectedApps
-        )
-        .compatMatchedTransitionSource(
-            id: app.uuid ?? "",
-            ns: namespace
-        )
-    }
-
     // MARK: - Empty State
 
-    private var emptyAppsView: some View {
+    private var _emptyAppsView: some View {
 
-        VStack(spacing: 14) {
+        VStack(
+            spacing: 14
+        ) {
 
             Image(
                 systemName:
                     "square.grid.2x2"
             )
-            .font(.system(size: 42))
-            .foregroundStyle(.secondary)
+            .font(
+                .system(
+                    size: 42
+                )
+            )
+            .foregroundStyle(
+                .secondary
+            )
 
-            Text(.localized("No Apps"))
-                .font(.headline)
+            Text(
+                .localized("No Apps")
+            )
+            .font(.headline)
 
             Text(
                 .localized(
@@ -557,179 +738,118 @@ struct HomeView: View {
                 )
             )
             .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
+            .foregroundStyle(
+                .secondary
+            )
+            .multilineTextAlignment(
+                .center
+            )
 
             Button {
-                isImporting = true
+
+                _isImportingPresenting = true
+
             } label: {
 
-                Label(
-                    .localized("Import"),
-                    systemImage: "plus"
+                Text(
+                    .localized("Import")
                 )
                 .bg()
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 35)
+        .frame(
+            maxWidth: .infinity
+        )
+        .padding(
+            .vertical,
+            35
+        )
     }
 
-    // MARK: - Import Menu
+    // MARK: - Import Actions
 
     @ViewBuilder
-    private var importActions: some View {
+    private func _importActions() -> some View {
 
-        Button {
-            isImporting = true
-        } label: {
+        Button(
+            .localized("Import from Files"),
+            systemImage: "folder"
+        ) {
 
-            Label(
-                .localized("Import from Files"),
-                systemImage: "folder"
-            )
+            _isImportingPresenting = true
         }
 
-        Button {
-            isDownloading = true
-        } label: {
+        Button(
+            .localized("Import from URL"),
+            systemImage: "globe"
+        ) {
 
-            Label(
-                .localized("Import from URL"),
-                systemImage: "globe"
-            )
+            _isDownloadingPresenting = true
         }
     }
 
-    // MARK: - Import IPA
+    // MARK: - Select All
 
-    private func importIPAFiles(
-        _ urls: [URL]
-    ) {
-
-        guard !urls.isEmpty else {
-            return
-        }
-
-        for url in urls {
-
-            let id =
-                "KindaManualImport_\(UUID().uuidString)"
-
-            let download =
-                downloadManager.startArchive(
-                    from: url,
-                    id: id
-                )
-
-            downloadManager.handlePachageFile(
-                url: url,
-                dl: download
-            ) { error in
-
-                if error != nil {
-
-                    DispatchQueue.main.async {
-
-                        UIAlertController.showAlertWithOk(
-                            title: .localized("Error"),
-                            message: .localized(
-                                "Whoops!, something went wrong when extracting the file."
-                            )
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - URL Import
-
-    private func importFromURL() {
-
-        let value =
-            downloadURL.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
-
-        guard
-            !value.isEmpty,
-            let url = URL(string: value)
-        else {
-
-            UIAlertController.showAlertWithOk(
-                title: .localized("Error"),
-                message: .localized(
-                    "The URL is invalid."
-                )
-            )
-
-            return
-        }
-
-        let id =
-            "KindaURLImport_\(UUID().uuidString)"
-
-        _ = downloadManager.startDownload(
-            from: url,
-            id: id
-        )
-
-        downloadURL = ""
-    }
-
-    // MARK: - Selection
-
-    private func selectAllApps() {
+    private func _selectAllApps() {
 
         let allIDs =
-            importedApps.compactMap(\.uuid)
+            _importedApps.compactMap {
+                $0.uuid
+            }
             +
-            signedApps.compactMap(\.uuid)
+            _signedApps.compactMap {
+                $0.uuid
+            }
 
-        if selectedApps.count == allIDs.count {
+        if _selectedApps.count == allIDs.count {
 
-            selectedApps.removeAll()
+            _selectedApps.removeAll()
 
         } else {
 
-            selectedApps = Set(allIDs)
+            _selectedApps =
+                Set(allIDs)
         }
     }
 
     // MARK: - Delete
 
-    private func deleteSelectedApps() {
+    private func _bulkDeleteSelectedApps() {
 
-        guard !selectedApps.isEmpty else {
+        let appsToDelete =
+            _selectedApps
+
+        guard !appsToDelete.isEmpty else {
             return
         }
 
-        let appsToDelete = selectedApps
-
         withAnimation(
-            .easeInOut(duration: 0.3)
+            .easeInOut(
+                duration: 0.5
+            )
         ) {
 
-            for id in appsToDelete {
+            for appUUID in appsToDelete {
 
                 if let signedApp =
-                    signedApps.first(
+                    _signedApps.first(
                         where: {
-                            $0.uuid == id
+                            $0.uuid == appUUID
                         }
-                    ) {
+                    )
+                {
 
                     Storage.shared.deleteApp(
                         for: signedApp
                     )
 
                 } else if let importedApp =
-                    importedApps.first(
+                    _importedApps.first(
                         where: {
-                            $0.uuid == id
+                            $0.uuid == appUUID
                         }
-                    ) {
+                    )
+                {
 
                     Storage.shared.deleteApp(
                         for: importedApp
@@ -738,7 +858,9 @@ struct HomeView: View {
             }
         }
 
-        selectedApps.removeAll()
-        editMode = .inactive
+        DispatchQueue.main.async {
+
+            _selectedApps.removeAll()
+        }
     }
 }
