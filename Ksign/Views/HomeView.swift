@@ -10,10 +10,6 @@ import UniformTypeIdentifiers
 import QuickLook
 import NimbleViews
 
-extension URL: Identifiable {
-    public var id: String { self.absoluteString }
-}
-
 struct HomeView: View {
     let directoryURL: URL?
     let isRootView: Bool
@@ -34,8 +30,8 @@ struct HomeView: View {
     @State private var navigateToDirectoryURL: URL?
     
     // الألوان المخصصة للواجهة
-    let bannerTurquoise = Color(red: 0.25, green: 0.75, blue: 0.68) // #3fbfae
-    let bannerGold = Color(red: 0.91, green: 0.72, blue: 0.36)      // #e8b85c
+    let bannerTurquoise = Color(red: 0.25, green: 0.75, blue: 0.68)
+    let bannerGold = Color(red: 0.91, green: 0.72, blue: 0.36)
     
     // MARK: - Initializers
     
@@ -55,7 +51,9 @@ struct HomeView: View {
         if searchText.isEmpty {
             return viewModel.files
         } else {
-            return viewModel.files.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            return viewModel.files.filter {
+                $0.name.localizedCaseInsensitiveContains(searchText)
+            }
         }
     }
     
@@ -86,11 +84,15 @@ struct HomeView: View {
         ZStack {
             contentView
                 .navigationTitle(navigationTitle)
-                .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
+                .searchable(
+                    text: $searchText,
+                    placement: .navigationBarDrawer(displayMode: .always)
+                )
                 .refreshable {
                     if isRootView {
                         await withCheckedContinuation { continuation in
                             viewModel.loadFiles()
+                            
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                 continuation.resume()
                             }
@@ -102,6 +104,7 @@ struct HomeView: View {
                         addButton
                         editButton
                     }
+                    
                     NBToolbarMenu(
                         systemImage: "line.3.horizontal.decrease",
                         style: .icon,
@@ -109,6 +112,7 @@ struct HomeView: View {
                     ) {
                         _sortActions()
                     }
+                    
                     if viewModel.isEditMode == .active {
                         ToolbarItem(placement: .topBarLeading) {
                             HStack(spacing: 12) {
@@ -148,26 +152,42 @@ struct HomeView: View {
                 useLastLocation: _useLastExportLocation,
                 onCompletion: { _ in
                     viewModel.selectedItems.removeAll()
-                    if viewModel.isEditMode == .active { viewModel.isEditMode = .inactive }
+                    
+                    if viewModel.isEditMode == .active {
+                        viewModel.isEditMode = .inactive
+                    }
+                    
                     viewModel.loadFiles()
                 }
             )
         }
         .fullScreenCover(item: $plistFileURL) { fileURL in
             PlistEditorView(fileURL: fileURL)
-                .compatNavigationTransition(id: fileURL.absoluteString, ns: _namespace)
+                .compatNavigationTransition(
+                    id: fileURL.absoluteString,
+                    ns: _namespace
+                )
         }
         .fullScreenCover(item: $hexEditorFileURL) { fileURL in
             HexEditorView(fileURL: fileURL)
-                .compatNavigationTransition(id: fileURL.absoluteString, ns: _namespace)
+                .compatNavigationTransition(
+                    id: fileURL.absoluteString,
+                    ns: _namespace
+                )
         }
         .fullScreenCover(item: $textEditorFileURL) { fileURL in
             TextEditorView(fileURL: fileURL)
-                .compatNavigationTransition(id: fileURL.absoluteString, ns: _namespace)
+                .compatNavigationTransition(
+                    id: fileURL.absoluteString,
+                    ns: _namespace
+                )
         }
         .fullScreenCover(item: $quickLookFileURL) { fileURL in
             QuickLookPreview(fileURL: fileURL)
-                .compatNavigationTransition(id: fileURL.absoluteString, ns: _namespace)
+                .compatNavigationTransition(
+                    id: fileURL.absoluteString,
+                    ns: _namespace
+                )
         }
     }
     
@@ -176,17 +196,31 @@ struct HomeView: View {
     @ViewBuilder
     private var contentView: some View {
         List {
-            // عرض البنر فقط في الشاشة الرئيسية وعندما لا يكون هناك بحث نشط
+            
+            // البنر يظهر فقط في الشاشة الرئيسية
+            // وعندما لا يوجد بحث نشط
             if isRootView && searchText.isEmpty {
                 ZStack(alignment: .bottomLeading) {
                     RoundedRectangle(cornerRadius: 18)
-                        .fill(LinearGradient(
-                            gradient: Gradient(colors: [bannerTurquoise, bannerGold]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(
+                                    colors: [
+                                        bannerTurquoise,
+                                        bannerGold
+                                    ]
+                                ),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .frame(height: 160)
-                        .shadow(color: bannerTurquoise.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .shadow(
+                            color: bannerTurquoise.opacity(0.3),
+                            radius: 8,
+                            x: 0,
+                            y: 4
+                        )
                     
                     VStack(alignment: .leading, spacing: 8) {
                         Text("مرحباً بك في KINDA")
@@ -207,7 +241,7 @@ struct HomeView: View {
                 .padding(.vertical, 10)
             }
             
-            // استخدام الـ FileRow الأصلي لضمان عمل كل الميزات برمجياً
+            // FileRow الأصلي للحفاظ على جميع وظائف الملفات
             ForEach(filteredFiles) { file in
                 FileRow(
                     file: file,
@@ -227,31 +261,50 @@ struct HomeView: View {
                 .swipeActions(edge: .trailing) {
                     swipeActions(for: file)
                 }
-                .compatMatchedTransitionSource(id: file.url.absoluteString, ns: _namespace)
+                .compatMatchedTransitionSource(
+                    id: file.url.absoluteString,
+                    ns: _namespace
+                )
             }
         }
         .listStyle(.plain)
         .environment(\.editMode, $viewModel.isEditMode)
-        .navigationDestination(isPresented: Binding(
-            get: { navigateToDirectoryURL != nil },
-            set: { if !$0 { navigateToDirectoryURL = nil } }
-        )) {
+        .navigationDestination(
+            isPresented: Binding(
+                get: {
+                    navigateToDirectoryURL != nil
+                },
+                set: {
+                    if !$0 {
+                        navigateToDirectoryURL = nil
+                    }
+                }
+            )
+        ) {
             if let url = navigateToDirectoryURL {
-                HomeView(directoryURL: url) // التوجيه الذكي للشاشة
+                HomeView(directoryURL: url)
             }
         }
         .overlay {
             if filteredFiles.isEmpty {
                 if #available(iOS 17, *) {
                     ContentUnavailableView {
-                        Label(.localized("No Files"), systemImage: "folder.fill.badge.questionmark")
+                        Label(
+                            .localized("No Files"),
+                            systemImage: "folder.fill.badge.questionmark"
+                        )
                     } description: {
-                        Text(.localized("Get started by importing your first file."))
+                        Text(
+                            .localized(
+                                "Get started by importing your first file."
+                            )
+                        )
                     } actions: {
                         Button {
                             viewModel.showingImporter = true
                         } label: {
-                            Text("Import Files").bg()
+                            Text("Import Files")
+                                .bg()
                         }
                     }
                 }
@@ -265,7 +318,7 @@ struct HomeView: View {
         if let directoryURL = directoryURL {
             return directoryURL.lastPathComponent
         } else {
-            return "الرئيسية" // العنوان الافتراضي
+            return "الرئيسية"
         }
     }
     
@@ -282,12 +335,18 @@ struct HomeView: View {
             Button {
                 viewModel.showingImporter = true
             } label: {
-                Label(String(localized: "Import Files"), systemImage: "doc.badge.plus")
+                Label(
+                    String(localized: "Import Files"),
+                    systemImage: "doc.badge.plus"
+                )
             }
+            
             Button {
                 UIAlertController.showAlertWithTextBox(
                     title: .localized("New Folder"),
-                    message: .localized("Enter a name for the new folder"),
+                    message: .localized(
+                        "Enter a name for the new folder"
+                    ),
                     textFieldPlaceholder: .localized("Folder name"),
                     submit: .localized("Create"),
                     cancel: .localized("Cancel"),
@@ -296,22 +355,31 @@ struct HomeView: View {
                     }
                 )
             } label: {
-                Label(String(localized: "New Folder"), systemImage: "folder.badge.plus")
+                Label(
+                    String(localized: "New Folder"),
+                    systemImage: "folder.badge.plus"
+                )
             }
+            
             Button {
                 UIAlertController.showAlertWithTextBox(
                     title: .localized("New Text File"),
-                    message: .localized("Enter a name for the new text file"),
+                    message: .localized(
+                        "Enter a name for the new text file"
+                    ),
                     textFieldPlaceholder: .localized("Text file name"),
                     textFieldText: "Unnamed.txt",
                     submit: .localized("Create"),
                     cancel: .localized("Cancel"),
                     onSubmit: { name in
-                       viewModel.createNewTextFile(name: name)
+                        viewModel.createNewTextFile(name: name)
                     }
                 )
             } label: {
-                Label(String(localized: "New Text File"), systemImage: "doc.badge.plus")
+                Label(
+                    String(localized: "New Text File"),
+                    systemImage: "doc.badge.plus"
+                )
             }
         } label: {
             Image(systemName: "plus")
@@ -323,14 +391,27 @@ struct HomeView: View {
     
     private var editButton: some View {
         Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                viewModel.isEditMode = viewModel.isEditMode == .active ? .inactive : .active
+            withAnimation(
+                .spring(
+                    response: 0.35,
+                    dampingFraction: 0.9
+                )
+            ) {
+                viewModel.isEditMode =
+                    viewModel.isEditMode == .active
+                    ? .inactive
+                    : .active
+                
                 if viewModel.isEditMode == .inactive {
                     viewModel.selectedItems.removeAll()
                 }
             }
         } label: {
-            Text(viewModel.isEditMode == .active ? String(localized: "Done") : String(localized: "Edit"))
+            Text(
+                viewModel.isEditMode == .active
+                ? String(localized: "Done")
+                : String(localized: "Edit")
+            )
         }
     }
     
@@ -344,7 +425,12 @@ struct HomeView: View {
                 viewModel.selectedItems.removeAll()
             }
         } label: {
-            Image(systemName: viewModel.selectedItems.isEmpty ? "checklist.checked" : "checklist.unchecked")
+            Image(
+                systemName:
+                    viewModel.selectedItems.isEmpty
+                    ? "checklist.checked"
+                    : "checklist.unchecked"
+            )
         }
     }
     
@@ -352,7 +438,10 @@ struct HomeView: View {
         Button {
             viewModel.showDirectoryPicker = true
         } label: {
-            Label(String(localized: "Move"), systemImage: "folder")
+            Label(
+                String(localized: "Move"),
+                systemImage: "folder"
+            )
         }
         .disabled(viewModel.selectedItems.isEmpty)
     }
@@ -360,9 +449,15 @@ struct HomeView: View {
     private var shareButton: some View {
         Button {
             if !viewModel.selectedItems.isEmpty {
-                let urls = viewModel.selectedItems.map { $0.url }
+                let urls = viewModel.selectedItems.map {
+                    $0.url
+                }
+                
                 shareItems = urls
-                UIActivityViewController.show(activityItems: shareItems)
+                
+                UIActivityViewController.show(
+                    activityItems: shareItems
+                )
             }
         } label: {
             Image(systemName: "square.and.arrow.up")
@@ -389,15 +484,23 @@ struct HomeView: View {
     // MARK: - File Operations
     
     private func extractArchive(_ file: FileItem) {
-        guard file.isArchive else { return }
+        guard file.isArchive else {
+            return
+        }
         
-        let extractItem = ExtractManager.shared.start(fileName: file.name)
+        let extractItem = ExtractManager.shared.start(
+            fileName: file.name
+        )
+        
         ExtractionService.extractArchive(
             file,
             to: viewModel.currentDirectory,
             progressCallback: { progress in
                 DispatchQueue.main.async {
-                    ExtractManager.shared.updateProgress(for: extractItem, progress: progress)
+                    ExtractManager.shared.updateProgress(
+                        for: extractItem,
+                        progress: progress
+                    )
                 }
             }
         ) { result in
@@ -407,24 +510,41 @@ struct HomeView: View {
                     withAnimation {
                         self.viewModel.loadFiles()
                     }
+                    
                 case .failure:
-                    UIAlertController.showAlertWithOk(title: .localized("Error"), message: .localized("Whoops!, something went wrong when extracting the file. \nMaybe try switching the extraction library in the settings?"))
+                    UIAlertController.showAlertWithOk(
+                        title: .localized("Error"),
+                        message: .localized(
+                            "Whoops!, something went wrong when extracting the file. \nMaybe try switching the extraction library in the settings?"
+                        )
+                    )
                 }
-                ExtractManager.shared.finish(item: extractItem)
+                
+                ExtractManager.shared.finish(
+                    item: extractItem
+                )
             }
         }
     }
     
     private func packageAppAsIPA(_ file: FileItem) {
-        guard file.isAppDirectory else { return }
+        guard file.isAppDirectory else {
+            return
+        }
         
-        let extractItem = ExtractManager.shared.start(fileName: file.name)
+        let extractItem = ExtractManager.shared.start(
+            fileName: file.name
+        )
+        
         ExtractionService.packageAppAsIPA(
             file,
             to: viewModel.currentDirectory,
             progressCallback: { progress in
                 DispatchQueue.main.async {
-                    ExtractManager.shared.updateProgress(for: extractItem, progress: progress)
+                    ExtractManager.shared.updateProgress(
+                        for: extractItem,
+                        progress: progress
+                    )
                 }
             }
         ) { result in
@@ -432,26 +552,60 @@ struct HomeView: View {
                 switch result {
                 case .success(let ipaFileName):
                     self.viewModel.loadFiles()
-                    UIAlertController.showAlertWithOk(title: .localized("Success"), message: .localized("Successfully packaged \(file.name) as \(ipaFileName)"))
+                    
+                    UIAlertController.showAlertWithOk(
+                        title: .localized("Success"),
+                        message: .localized(
+                            "Successfully packaged \(file.name) as \(ipaFileName)"
+                        )
+                    )
+                    
                 case .failure(let error):
-                    UIAlertController.showAlertWithOk(title: .localized("Error"), message: .localized("Failed to package IPA: \(error.localizedDescription)"))
+                    UIAlertController.showAlertWithOk(
+                        title: .localized("Error"),
+                        message: .localized(
+                            "Failed to package IPA: \(error.localizedDescription)"
+                        )
+                    )
                 }
-                ExtractManager.shared.finish(item: extractItem)
+                
+                ExtractManager.shared.finish(
+                    item: extractItem
+                )
             }
         }
     }
     
     private func importIpaToLibrary(_ file: FileItem) {
         let id = "FeatherManualDownload_\(UUID().uuidString)"
-        let download = self.downloadManager.startArchive(from: file.url, id: id)
-        downloadManager.handlePachageFile(url: file.url, dl: download) { err in
+        
+        let download = downloadManager.startArchive(
+            from: file.url,
+            id: id
+        )
+        
+        downloadManager.handlePachageFile(
+            url: file.url,
+            dl: download
+        ) { err in
             DispatchQueue.main.async {
-                if let error = err {
-                    UIAlertController.showAlertWithOk(title: .localized("Error"), message: .localized("Whoops!, something went wrong when extracting the file. \nMaybe try switching the extraction library in the settings?"))
-                } else {
+                
+                // عرض الخطأ فقط عند وجود خطأ فعلي
+                if err != nil {
+                    UIAlertController.showAlertWithOk(
+                        title: .localized("Error"),
+                        message: .localized(
+                            "Whoops!, something went wrong when extracting the file. \nMaybe try switching the extraction library in the settings?"
+                        )
+                    )
                 }
-                if let index = DownloadManager.shared.getDownloadIndex(by: download.id) {
-                    DownloadManager.shared.downloads.remove(at: index)
+                
+                if let index = DownloadManager.shared.getDownloadIndex(
+                    by: download.id
+                ) {
+                    DownloadManager.shared.downloads.remove(
+                        at: index
+                    )
                 }
             }
         }
@@ -460,32 +614,55 @@ struct HomeView: View {
     // MARK: - UI Helpers
     
     @ViewBuilder
-    private func swipeActions(for file: FileItem) -> some View {
-        FileUIHelpers.swipeActions(for: file, viewModel: viewModel)
+    private func swipeActions(
+        for file: FileItem
+    ) -> some View {
+        FileUIHelpers.swipeActions(
+            for: file,
+            viewModel: viewModel
+        )
     }
 
     @ViewBuilder
     private func _sortActions() -> some View {
         Section(.localized("Filter by")) {
-            ForEach(FilesViewModel.SortOption.allCases, id: \.displayName) { opt in
+            ForEach(
+                FilesViewModel.SortOption.allCases,
+                id: \.displayName
+            ) { opt in
                 _sortButton(for: opt)
             }
         }
     }
 
-    private func _sortButton(for option: FilesViewModel.SortOption) -> some View {
+    private func _sortButton(
+        for option: FilesViewModel.SortOption
+    ) -> some View {
         Button {
             if viewModel.sortOption == option {
-                viewModel.updateSort(option: option, ascending: !viewModel.sortAscending)
+                viewModel.updateSort(
+                    option: option,
+                    ascending: !viewModel.sortAscending
+                )
             } else {
-                viewModel.updateSort(option: option, ascending: true)
+                viewModel.updateSort(
+                    option: option,
+                    ascending: true
+                )
             }
         } label: {
             HStack {
                 Text(option.displayName)
+                
                 Spacer()
+                
                 if viewModel.sortOption == option {
-                    Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                    Image(
+                        systemName:
+                            viewModel.sortAscending
+                            ? "chevron.up"
+                            : "chevron.down"
+                    )
                 }
             }
         }
