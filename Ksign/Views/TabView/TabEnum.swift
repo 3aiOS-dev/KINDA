@@ -14,12 +14,14 @@ enum TabEnum: String, CaseIterable, Hashable {
     case settings
     case certificates
 
+    // MARK: - Title
+
     var title: String {
 
         switch self {
 
         case .files:
-            return "الرئيسية"
+            return .localized("Home")
 
         case .sources:
             return .localized("Sources")
@@ -34,6 +36,8 @@ enum TabEnum: String, CaseIterable, Hashable {
             return .localized("Certificates")
         }
     }
+
+    // MARK: - Icon
 
     var icon: String {
 
@@ -55,6 +59,8 @@ enum TabEnum: String, CaseIterable, Hashable {
             return "person.text.rectangle"
         }
     }
+
+    // MARK: - View
 
     @ViewBuilder
     static func view(
@@ -84,6 +90,8 @@ enum TabEnum: String, CaseIterable, Hashable {
         }
     }
 
+    // MARK: - Default Tabs
+
     static var defaultTabs: [TabEnum] {
 
         [
@@ -92,6 +100,8 @@ enum TabEnum: String, CaseIterable, Hashable {
             .settings
         ]
     }
+
+    // MARK: - Customizable Tabs
 
     static var customizableTabs: [TabEnum] {
 
