@@ -1,15 +1,8 @@
-//
-//  TabEnum.swift
-//  feather
-//
-//  Created by samara on 22.03.2025.
-//
-
 import SwiftUI
 import NimbleViews
 
 enum TabEnum: String, CaseIterable, Hashable {
-    case files
+    case home // تم التغيير هنا من files إلى home
     case sources
     case library
     case settings
@@ -17,8 +10,8 @@ enum TabEnum: String, CaseIterable, Hashable {
 
     var title: String {
         switch self {
-        case .files:
-            return .localized("Files")
+        case .home:
+            return .localized("الرئيسية") // يمكنك جعلها "Home" إذا كان التطبيق بالإنجليزية
         case .sources:
             return .localized("Sources")
         case .library:
@@ -32,8 +25,8 @@ enum TabEnum: String, CaseIterable, Hashable {
 
     var icon: String {
         switch self {
-        case .files:
-            return "folder.fill"
+        case .home:
+            return "house.fill" // تم تغيير الأيقونة لتناسب الرئيسية
         case .sources:
             return "globe.desk"
         case .library:
@@ -48,8 +41,8 @@ enum TabEnum: String, CaseIterable, Hashable {
     @ViewBuilder
     static func view(for tab: TabEnum) -> some View {
         switch tab {
-        case .files:
-            FilesView()
+        case .home:
+            HomeView() // توجيه التبويب إلى الشاشة الجديدة
 
         case .sources:
             SourcesView()
@@ -69,7 +62,7 @@ enum TabEnum: String, CaseIterable, Hashable {
 
     static var defaultTabs: [TabEnum] {
         [
-            .files,
+            .home, // تم التحديث هنا
             .library,
             .settings
         ]
