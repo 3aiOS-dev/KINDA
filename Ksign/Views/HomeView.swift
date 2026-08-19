@@ -2,669 +2,661 @@
 //  HomeView.swift
 //  Ksign
 //
-//  (Merged Design with FilesView Logic)
+//  التطبيقات - الشاشة الرئيسية
 //
 
 import SwiftUI
-import UniformTypeIdentifiers
-import QuickLook
+import CoreData
 import NimbleViews
 
+// MARK: - Home View
 struct HomeView: View {
-    let directoryURL: URL?
-    let isRootView: Bool
-    @Namespace private var _namespace
-    
-    @StateObject private var viewModel: FilesViewModel
+
+    // MARK: Managers
     @StateObject private var downloadManager = DownloadManager.shared
+
+    // MARK: Presenting
+    @State private var selectedInfoAppPresenting: AnyApp?
+    @State private var selectedSigningAppPresenting: AnyApp?
+    @State private var selectedInstallAppPresenting: AnyApp?
+    @State private var selectedAppDylibsPresenting: AnyApp?
+
+    @State private var isBulkSigningPresenting = false
+    @State private var isBulkInstallingPresenting = false
+
+    @State private var isImportingPresenting = false
+    @State private var isDownloadingPresenting = false
+
+    @State private var alertDownloadString = ""
     @State private var searchText = ""
 
-    @AppStorage("Feather.useLastExportLocation") private var _useLastExportLocation: Bool = false
+    // 0 = التطبيقات المستوردة
+    // 1 = التطبيقات الموقعة
+    @State private var selectedTab = 0
 
-    @State private var plistFileURL: URL?
-    @State private var hexEditorFileURL: URL?
-    @State private var textEditorFileURL: URL?
-    @State private var quickLookFileURL: URL?
-    @State private var moveSingleFile: FileItem?
-    @State private var shareItems: [Any] = []
-    @State private var navigateToDirectoryURL: URL?
-    
-    // الألوان المخصصة للواجهة
-    let bannerTurquoise = Color(red: 0.25, green: 0.75, blue: 0.68)
-    let bannerGold = Color(red: 0.91, green: 0.72, blue: 0.36)
-    
-    // MARK: - Initializers
-    
-    init() {
-        self.directoryURL = nil
-        self.isRootView = true
-        self._viewModel = StateObject(wrappedValue: FilesViewModel())
-    }
-    
-    init(directoryURL: URL) {
-        self.directoryURL = directoryURL
-        self.isRootView = false
-        self._viewModel = StateObject(wrappedValue: FilesViewModel(directory: directoryURL))
-    }
-    
-    private var filteredFiles: [FileItem] {
-        if searchText.isEmpty {
-            return viewModel.files
-        } else {
-            return viewModel.files.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText)
-            }
+    // MARK: Edit Mode
+    @State private var isEditMode: EditMode = .inactive
+    @State private var selectedApps: Set<String> = []
+
+    @Namespace private var namespace
+
+    // MARK: Core Data
+
+    @FetchRequest(
+        entity: Signed.entity(),
+        sortDescriptors: [
+            NSSortDescriptor(
+                keyPath: \Signed.date,
+                ascending: false
+            )
+        ],
+        animation: .snappy
+    )
+    private var signedApps: FetchedResults<Signed>
+
+    @FetchRequest(
+        entity: Imported.entity(),
+        sortDescriptors: [
+            NSSortDescriptor(
+                keyPath: \Imported.date,
+                ascending: false
+            )
+        ],
+        animation: .snappy
+    )
+    private var importedApps: FetchedResults<Imported>
+
+    // MARK: Filtered Apps
+
+    private var filteredSignedApps: [Signed] {
+        signedApps.filter { app in
+            searchText.isEmpty ||
+            (app.name?.localizedCaseInsensitiveContains(searchText) ?? false)
         }
     }
-    
+
+    private var filteredImportedApps: [Imported] {
+        importedApps.filter { app in
+            searchText.isEmpty ||
+            (app.name?.localizedCaseInsensitiveContains(searchText) ?? false)
+        }
+    }
+
+    // MARK: Body
+
     var body: some View {
-        Group {
-            if isRootView {
-                NavigationStack {
-                    filesBrowserContent
+        NBNavigationView(.localized("الرئيسية")) {
+
+            VStack(spacing: 0) {
+
+                // MARK: App Type Picker
+
+                Picker(
+                    "",
+                    selection: $selectedTab
+                ) {
+                    Text(
+                        .localized("التطبيقات")
+                    )
+                    .tag(0)
+
+                    Text(
+                        .localized("الموقعة")
+                    )
+                    .tag(1)
                 }
-                .accentColor(.accentColor)
-            } else {
-                filesBrowserContent
-            }
-        }
-        .onAppear {
-            setupView()
-        }
-        .onDisappear {
-            if !isRootView {
-                NotificationCenter.default.removeObserver(self)
-            }
-        }
-    }
-    
-    // MARK: - Main Content
-    
-    private var filesBrowserContent: some View {
-        ZStack {
-            contentView
-                .navigationTitle(navigationTitle)
-                .searchable(
-                    text: $searchText,
-                    placement: .navigationBarDrawer(displayMode: .always)
-                )
-                .refreshable {
-                    if isRootView {
-                        await withCheckedContinuation { continuation in
-                            viewModel.loadFiles()
-                            
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                continuation.resume()
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+
+                // MARK: Apps List
+
+                NBListAdaptable {
+
+                    if selectedTab == 0 {
+
+                        NBSection(
+                            .localized("التطبيقات"),
+                            secondary: filteredImportedApps.count.description
+                        ) {
+
+                            ForEach(
+                                filteredImportedApps,
+                                id: \.uuid
+                            ) { app in
+
+                                LibraryCellView(
+                                    app: app,
+                                    selectedInfoAppPresenting: $selectedInfoAppPresenting,
+                                    selectedSigningAppPresenting: $selectedSigningAppPresenting,
+                                    selectedInstallAppPresenting: $selectedInstallAppPresenting,
+                                    selectedAppDylibsPresenting: $selectedAppDylibsPresenting,
+                                    selectedApps: $selectedApps
+                                )
+                                .compatMatchedTransitionSource(
+                                    id: app.uuid ?? "",
+                                    ns: namespace
+                                )
+                            }
+                        }
+
+                    } else {
+
+                        NBSection(
+                            .localized("التطبيقات الموقعة"),
+                            secondary: filteredSignedApps.count.description
+                        ) {
+
+                            ForEach(
+                                filteredSignedApps,
+                                id: \.uuid
+                            ) { app in
+
+                                LibraryCellView(
+                                    app: app,
+                                    selectedInfoAppPresenting: $selectedInfoAppPresenting,
+                                    selectedSigningAppPresenting: $selectedSigningAppPresenting,
+                                    selectedInstallAppPresenting: $selectedInstallAppPresenting,
+                                    selectedAppDylibsPresenting: $selectedAppDylibsPresenting,
+                                    selectedApps: $selectedApps
+                                )
+                                .compatMatchedTransitionSource(
+                                    id: app.uuid ?? "",
+                                    ns: namespace
+                                )
                             }
                         }
                     }
                 }
-                .toolbar {
-                    ToolbarItemGroup(placement: .navigationBarTrailing) {
-                        addButton
-                        editButton
+            }
+
+            // MARK: Search
+
+            .searchable(
+                text: $searchText,
+                placement: .platform()
+            )
+
+            // MARK: Empty State
+
+            .overlay {
+
+                let noImportedApps = filteredImportedApps.isEmpty
+                let noSignedApps = filteredSignedApps.isEmpty
+
+                if noImportedApps && noSignedApps {
+
+                    if #available(iOS 17, *) {
+
+                        ContentUnavailableView {
+
+                            Label(
+                                .localized("لا توجد تطبيقات"),
+                                systemImage: "app.badge"
+                            )
+
+                        } description: {
+
+                            Text(
+                                .localized(
+                                    "ابدأ باستيراد أول ملف IPA إلى KINDA."
+                                )
+                            )
+
+                        } actions: {
+
+                            Menu {
+
+                                importActions()
+
+                            } label: {
+
+                                Text(
+                                    .localized("استيراد")
+                                )
+                                .bg()
+                            }
+                        }
                     }
-                    
+                }
+            }
+
+            // MARK: Toolbar
+
+            .toolbar {
+
+                // زر التعديل
+                ToolbarItem(
+                    placement: .topBarLeading
+                ) {
+
+                    EditButton()
+                }
+
+                // وضع التعديل
+                if isEditMode.isEditing {
+
+                    ToolbarItemGroup(
+                        placement: .topBarTrailing
+                    ) {
+
+                        // Sign
+                        if selectedTab == 0 {
+
+                            Button {
+
+                                isBulkSigningPresenting = true
+
+                            } label: {
+
+                                NBButton(
+                                    .localized("Sign"),
+                                    systemImage: "signature",
+                                    style: .icon
+                                )
+                            }
+                            .disabled(selectedApps.isEmpty)
+
+                        }
+
+                        // Install
+                        else {
+
+                            Button {
+
+                                isBulkInstallingPresenting = true
+
+                            } label: {
+
+                                NBButton(
+                                    .localized("Install"),
+                                    systemImage: "square.and.arrow.down"
+                                )
+                            }
+                            .disabled(selectedApps.isEmpty)
+                        }
+
+                        // Delete
+                        Button {
+
+                            bulkDeleteSelectedApps()
+
+                        } label: {
+
+                            NBButton(
+                                .localized("Delete"),
+                                systemImage: "trash",
+                                style: .icon
+                            )
+                        }
+                        .disabled(selectedApps.isEmpty)
+                    }
+
+                } else {
+
+                    // إضافة / استيراد تطبيق
                     NBToolbarMenu(
-                        systemImage: "line.3.horizontal.decrease",
+                        systemImage: "plus",
                         style: .icon,
                         placement: .topBarTrailing
                     ) {
-                        _sortActions()
+
+                        importActions()
                     }
-                    
-                    if viewModel.isEditMode == .active {
-                        ToolbarItem(placement: .topBarLeading) {
-                            HStack(spacing: 12) {
-                                selectAllButton
-                                moveButton
-                                shareButton
-                                deleteButton
+                }
+            }
+
+            // MARK: Edit Mode
+
+            .environment(
+                \.editMode,
+                $isEditMode
+            )
+
+            // MARK: App Info
+
+            .sheet(
+                item: $selectedInfoAppPresenting
+            ) { app in
+
+                LibraryInfoView(
+                    app: app.base
+                )
+            }
+
+            // MARK: Install
+
+            .sheet(
+                item: $selectedInstallAppPresenting
+            ) { app in
+
+                InstallPreviewView(
+                    app: app.base,
+                    isSharing: app.archive
+                )
+                .presentationDetents(
+                    [.height(200)]
+                )
+                .presentationDragIndicator(
+                    .visible
+                )
+            }
+
+            // MARK: Signing
+
+            .fullScreenCover(
+                item: $selectedSigningAppPresenting
+            ) { app in
+
+                SigningView(
+                    app: app.base,
+                    signAndInstall: app.signAndInstall
+                )
+                .compatNavigationTransition(
+                    id: app.base.uuid ?? "",
+                    ns: namespace
+                )
+            }
+
+            // MARK: Dylibs
+
+            .fullScreenCover(
+                item: $selectedAppDylibsPresenting
+            ) { app in
+
+                DylibsView(
+                    app: app.base
+                )
+                .compatNavigationTransition(
+                    id: app.base.uuid ?? "",
+                    ns: namespace
+                )
+            }
+
+            // MARK: Bulk Signing
+
+            .fullScreenCover(
+                isPresented: $isBulkSigningPresenting
+            ) {
+
+                BulkSigningView(
+                    apps: selectedApps.compactMap { id in
+
+                        (
+                            importedApps.first(
+                                where: {
+                                    $0.uuid == id
+                                }
+                            ) as AppInfoPresentable?
+                        )
+                        ??
+                        (
+                            signedApps.first(
+                                where: {
+                                    $0.uuid == id
+                                }
+                            ) as AppInfoPresentable?
+                        )
+                    }
+                )
+                .compatNavigationTransition(
+                    id: selectedApps.joined(
+                        separator: ","
+                    ),
+                    ns: namespace
+                )
+                .onReceive(
+                    NotificationCenter.default.publisher(
+                        for: NSNotification.Name(
+                            "ksign.bulkSigningFinished"
+                        )
+                    )
+                ) { _ in
+
+                    selectedTab = 1
+                }
+            }
+
+            // MARK: Bulk Installing
+
+            .sheet(
+                isPresented: $isBulkInstallingPresenting
+            ) {
+
+                BulkInstallPreviewView(
+                    apps: selectedApps.compactMap { id in
+
+                        (
+                            importedApps.first(
+                                where: {
+                                    $0.uuid == id
+                                }
+                            ) as AppInfoPresentable?
+                        )
+                        ??
+                        (
+                            signedApps.first(
+                                where: {
+                                    $0.uuid == id
+                                }
+                            ) as AppInfoPresentable?
+                        )
+                    }
+                )
+                .presentationDetents(
+                    [
+                        .medium,
+                        .large
+                    ]
+                )
+                .presentationDragIndicator(
+                    .visible
+                )
+            }
+
+            // MARK: Import IPA
+
+            .sheet(
+                isPresented: $isImportingPresenting
+            ) {
+
+                FileImporterRepresentableView(
+                    allowedContentTypes: [
+                        .ipa,
+                        .tipa
+                    ],
+                    allowsMultipleSelection: true,
+                    onDocumentsPicked: { urls in
+
+                        guard !urls.isEmpty else {
+                            return
+                        }
+
+                        for ipaURL in urls {
+
+                            let id =
+                                "FeatherManualDownload_\(UUID().uuidString)"
+
+                            let download =
+                                downloadManager.startArchive(
+                                    from: ipaURL,
+                                    id: id
+                                )
+
+                            downloadManager.handlePachageFile(
+                                url: ipaURL,
+                                dl: download
+                            ) { error in
+
+                                if error != nil {
+
+                                    UIAlertController.showAlertWithOk(
+                                        title: .localized("Error"),
+                                        message: .localized(
+                                            "Whoops!, something went wrong when extracting the file. \nMaybe try switching the extraction library in the settings?"
+                                        )
+                                    )
+                                }
                             }
                         }
                     }
+                )
+            }
+
+            // MARK: Import From URL
+
+            .alert(
+                .localized("Import from URL"),
+                isPresented: $isDownloadingPresenting
+            ) {
+
+                TextField(
+                    .localized("URL"),
+                    text: $alertDownloadString
+                )
+
+                Button(
+                    .localized("Cancel"),
+                    role: .cancel
+                ) {
+
+                    alertDownloadString = ""
                 }
-        }
-        .sheet(isPresented: $viewModel.showingImporter) {
-            FileImporterRepresentableView(
-                allowedContentTypes: [UTType.item],
-                allowsMultipleSelection: true,
-                onDocumentsPicked: { urls in
-                    viewModel.importFiles(urls: urls)
-                }
-            )
-        }
-        .sheet(item: $moveSingleFile) { item in
-            FileExporterRepresentableView(
-                urlsToExport: [item.url],
-                asCopy: false,
-                useLastLocation: _useLastExportLocation,
-                onCompletion: { _ in
-                    moveSingleFile = nil
-                    viewModel.loadFiles()
-                }
-            )
-        }
-        .sheet(isPresented: $viewModel.showDirectoryPicker) {
-            FileExporterRepresentableView(
-                urlsToExport: Array(viewModel.selectedItems.map { $0.url }),
-                asCopy: false,
-                useLastLocation: _useLastExportLocation,
-                onCompletion: { _ in
-                    viewModel.selectedItems.removeAll()
-                    
-                    if viewModel.isEditMode == .active {
-                        viewModel.isEditMode = .inactive
+
+                Button(
+                    .localized("OK")
+                ) {
+
+                    guard
+                        let url = URL(
+                            string: alertDownloadString
+                        )
+                    else {
+                        return
                     }
-                    
-                    viewModel.loadFiles()
+
+                    _ = downloadManager.startDownload(
+                        from: url,
+                        id:
+                            "FeatherManualDownload_\(UUID().uuidString)"
+                    )
+
+                    alertDownloadString = ""
                 }
-            )
-        }
-        .fullScreenCover(item: $plistFileURL) { fileURL in
-            PlistEditorView(fileURL: fileURL)
-                .compatNavigationTransition(
-                    id: fileURL.absoluteString,
-                    ns: _namespace
+
+            }
+
+            // MARK: Sign & Install Notification
+
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: NSNotification.Name(
+                        "feather.installApp"
+                    )
                 )
+            ) { _ in
+
+                if let app = signedApps.first {
+
+                    selectedInstallAppPresenting =
+                        AnyApp(
+                            base: app
+                        )
+                }
+            }
         }
-        .fullScreenCover(item: $hexEditorFileURL) { fileURL in
-            HexEditorView(fileURL: fileURL)
-                .compatNavigationTransition(
-                    id: fileURL.absoluteString,
-                    ns: _namespace
-                )
-        }
-        .fullScreenCover(item: $textEditorFileURL) { fileURL in
-            TextEditorView(fileURL: fileURL)
-                .compatNavigationTransition(
-                    id: fileURL.absoluteString,
-                    ns: _namespace
-                )
-        }
-        .fullScreenCover(item: $quickLookFileURL) { fileURL in
-            QuickLookPreview(fileURL: fileURL)
-                .compatNavigationTransition(
-                    id: fileURL.absoluteString,
-                    ns: _namespace
-                )
+
+        // MARK: Edit Mode Cleanup
+
+        .onChange(
+            of: isEditMode
+        ) { state in
+
+            if !state.isEditing {
+
+                DispatchQueue.main.async {
+
+                    withAnimation {
+
+                        selectedApps.removeAll()
+                    }
+                }
+            }
         }
     }
-    
-    // MARK: - Content Views
-    
+}
+
+// MARK: - Import Actions
+
+extension HomeView {
+
     @ViewBuilder
-    private var contentView: some View {
-        List {
-            
-            // البنر يظهر فقط في الشاشة الرئيسية
-            // وعندما لا يوجد بحث نشط
-            if isRootView && searchText.isEmpty {
-                ZStack(alignment: .bottomLeading) {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(
-                                    colors: [
-                                        bannerTurquoise,
-                                        bannerGold
-                                    ]
-                                ),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(height: 160)
-                        .shadow(
-                            color: bannerTurquoise.opacity(0.3),
-                            radius: 8,
-                            x: 0,
-                            y: 4
-                        )
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("مرحباً بك في KINDA")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        
-                        Text("إدارة وتوقيع تطبيقاتك بسهولة وبدون كمبيوتر.")
-                            .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.9))
-                    }
-                    .padding(20)
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-            }
-            
-            // FileRow الأصلي للحفاظ على جميع وظائف الملفات
-            ForEach(filteredFiles) { file in
-                FileRow(
-                    file: file,
-                    isSelected: viewModel.selectedItems.contains(file),
-                    viewModel: viewModel,
-                    plistFileURL: $plistFileURL,
-                    hexEditorFileURL: $hexEditorFileURL,
-                    textEditorFileURL: $textEditorFileURL,
-                    quickLookFileURL: $quickLookFileURL,
-                    shareItems: $shareItems,
-                    moveFileItem: $moveSingleFile,
-                    onExtractArchive: extractArchive,
-                    onPackageApp: packageAppAsIPA,
-                    onImportIpa: importIpaToLibrary,
-                    onNavigateToDirectory: navigateToDirectory
-                )
-                .swipeActions(edge: .trailing) {
-                    swipeActions(for: file)
-                }
-                .compatMatchedTransitionSource(
-                    id: file.url.absoluteString,
-                    ns: _namespace
-                )
-            }
+    private func importActions() -> some View {
+
+        Button(
+            .localized("Import from Files"),
+            systemImage: "folder"
+        ) {
+
+            isImportingPresenting = true
         }
-        .listStyle(.plain)
-        .environment(\.editMode, $viewModel.isEditMode)
-        .navigationDestination(
-            isPresented: Binding(
-                get: {
-                    navigateToDirectoryURL != nil
-                },
-                set: {
-                    if !$0 {
-                        navigateToDirectoryURL = nil
-                    }
-                }
+
+        Button(
+            .localized("Import from URL"),
+            systemImage: "globe"
+        ) {
+
+            isDownloadingPresenting = true
+        }
+    }
+}
+
+// MARK: - Bulk Delete
+
+extension HomeView {
+
+    private func bulkDeleteSelectedApps() {
+
+        let appsToDelete = selectedApps
+
+        withAnimation(
+            .easeInOut(
+                duration: 0.5
             )
         ) {
-            if let url = navigateToDirectoryURL {
-                HomeView(directoryURL: url)
-            }
-        }
-        .overlay {
-            if filteredFiles.isEmpty {
-                if #available(iOS 17, *) {
-                    ContentUnavailableView {
-                        Label(
-                            .localized("No Files"),
-                            systemImage: "folder.fill.badge.questionmark"
-                        )
-                    } description: {
-                        Text(
-                            .localized(
-                                "Get started by importing your first file."
-                            )
-                        )
-                    } actions: {
-                        Button {
-                            viewModel.showingImporter = true
-                        } label: {
-                            Text("Import Files")
-                                .bg()
+
+            for appUUID in appsToDelete {
+
+                if let signedApp =
+                    signedApps.first(
+                        where: {
+                            $0.uuid == appUUID
                         }
-                    }
-                }
-            }
-        }
-    }
-    
-    // MARK: - Helper Properties
-    
-    private var navigationTitle: String {
-        if let directoryURL = directoryURL {
-            return directoryURL.lastPathComponent
-        } else {
-            return "الرئيسية"
-        }
-    }
-    
-    // MARK: - Setup Methods
-    
-    private func setupView() {
-        viewModel.loadFiles()
-    }
-    
-    // MARK: - Toolbar Items
-    
-    private var addButton: some View {
-        Menu {
-            Button {
-                viewModel.showingImporter = true
-            } label: {
-                Label(
-                    String(localized: "Import Files"),
-                    systemImage: "doc.badge.plus"
-                )
-            }
-            
-            Button {
-                UIAlertController.showAlertWithTextBox(
-                    title: .localized("New Folder"),
-                    message: .localized(
-                        "Enter a name for the new folder"
-                    ),
-                    textFieldPlaceholder: .localized("Folder name"),
-                    submit: .localized("Create"),
-                    cancel: .localized("Cancel"),
-                    onSubmit: { name in
-                        viewModel.createNewFolder(name: name)
-                    }
-                )
-            } label: {
-                Label(
-                    String(localized: "New Folder"),
-                    systemImage: "folder.badge.plus"
-                )
-            }
-            
-            Button {
-                UIAlertController.showAlertWithTextBox(
-                    title: .localized("New Text File"),
-                    message: .localized(
-                        "Enter a name for the new text file"
-                    ),
-                    textFieldPlaceholder: .localized("Text file name"),
-                    textFieldText: "Unnamed.txt",
-                    submit: .localized("Create"),
-                    cancel: .localized("Cancel"),
-                    onSubmit: { name in
-                        viewModel.createNewTextFile(name: name)
-                    }
-                )
-            } label: {
-                Label(
-                    String(localized: "New Text File"),
-                    systemImage: "doc.badge.plus"
-                )
-            }
-        } label: {
-            Image(systemName: "plus")
-        }
-        .menuStyle(BorderlessButtonMenuStyle())
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-    }
-    
-    private var editButton: some View {
-        Button {
-            withAnimation(
-                .spring(
-                    response: 0.35,
-                    dampingFraction: 0.9
-                )
-            ) {
-                viewModel.isEditMode =
-                    viewModel.isEditMode == .active
-                    ? .inactive
-                    : .active
-                
-                if viewModel.isEditMode == .inactive {
-                    viewModel.selectedItems.removeAll()
-                }
-            }
-        } label: {
-            Text(
-                viewModel.isEditMode == .active
-                ? String(localized: "Done")
-                : String(localized: "Edit")
-            )
-        }
-    }
-    
-    private var selectAllButton: some View {
-        Button {
-            if viewModel.selectedItems.isEmpty {
-                for file in viewModel.files {
-                    viewModel.selectedItems.insert(file)
-                }
-            } else {
-                viewModel.selectedItems.removeAll()
-            }
-        } label: {
-            Image(
-                systemName:
-                    viewModel.selectedItems.isEmpty
-                    ? "checklist.checked"
-                    : "checklist.unchecked"
-            )
-        }
-    }
-    
-    private var moveButton: some View {
-        Button {
-            viewModel.showDirectoryPicker = true
-        } label: {
-            Label(
-                String(localized: "Move"),
-                systemImage: "folder"
-            )
-        }
-        .disabled(viewModel.selectedItems.isEmpty)
-    }
-    
-    private var shareButton: some View {
-        Button {
-            if !viewModel.selectedItems.isEmpty {
-                let urls = viewModel.selectedItems.map {
-                    $0.url
-                }
-                
-                shareItems = urls
-                
-                UIActivityViewController.show(
-                    activityItems: shareItems
-                )
-            }
-        } label: {
-            Image(systemName: "square.and.arrow.up")
-        }
-        .disabled(viewModel.selectedItems.isEmpty)
-    }
-    
-    private var deleteButton: some View {
-        Button(role: .destructive) {
-            viewModel.deleteSelectedItems()
-        } label: {
-            Image(systemName: "trash")
-        }
-        .tint(.red)
-        .disabled(viewModel.selectedItems.isEmpty)
-    }
-    
-    // MARK: - Actions
-    
-    private func navigateToDirectory(_ url: URL) {
-        navigateToDirectoryURL = url
-    }
-    
-    // MARK: - File Operations
-    
-    private func extractArchive(_ file: FileItem) {
-        guard file.isArchive else {
-            return
-        }
-        
-        let extractItem = ExtractManager.shared.start(
-            fileName: file.name
-        )
-        
-        ExtractionService.extractArchive(
-            file,
-            to: viewModel.currentDirectory,
-            progressCallback: { progress in
-                DispatchQueue.main.async {
-                    ExtractManager.shared.updateProgress(
-                        for: extractItem,
-                        progress: progress
-                    )
-                }
-            }
-        ) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    withAnimation {
-                        self.viewModel.loadFiles()
-                    }
-                    
-                case .failure:
-                    UIAlertController.showAlertWithOk(
-                        title: .localized("Error"),
-                        message: .localized(
-                            "Whoops!, something went wrong when extracting the file. \nMaybe try switching the extraction library in the settings?"
-                        )
-                    )
-                }
-                
-                ExtractManager.shared.finish(
-                    item: extractItem
-                )
-            }
-        }
-    }
-    
-    private func packageAppAsIPA(_ file: FileItem) {
-        guard file.isAppDirectory else {
-            return
-        }
-        
-        let extractItem = ExtractManager.shared.start(
-            fileName: file.name
-        )
-        
-        ExtractionService.packageAppAsIPA(
-            file,
-            to: viewModel.currentDirectory,
-            progressCallback: { progress in
-                DispatchQueue.main.async {
-                    ExtractManager.shared.updateProgress(
-                        for: extractItem,
-                        progress: progress
-                    )
-                }
-            }
-        ) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let ipaFileName):
-                    self.viewModel.loadFiles()
-                    
-                    UIAlertController.showAlertWithOk(
-                        title: .localized("Success"),
-                        message: .localized(
-                            "Successfully packaged \(file.name) as \(ipaFileName)"
-                        )
-                    )
-                    
-                case .failure(let error):
-                    UIAlertController.showAlertWithOk(
-                        title: .localized("Error"),
-                        message: .localized(
-                            "Failed to package IPA: \(error.localizedDescription)"
-                        )
-                    )
-                }
-                
-                ExtractManager.shared.finish(
-                    item: extractItem
-                )
-            }
-        }
-    }
-    
-    private func importIpaToLibrary(_ file: FileItem) {
-        let id = "FeatherManualDownload_\(UUID().uuidString)"
-        
-        let download = downloadManager.startArchive(
-            from: file.url,
-            id: id
-        )
-        
-        downloadManager.handlePachageFile(
-            url: file.url,
-            dl: download
-        ) { err in
-            DispatchQueue.main.async {
-                
-                // عرض الخطأ فقط عند وجود خطأ فعلي
-                if err != nil {
-                    UIAlertController.showAlertWithOk(
-                        title: .localized("Error"),
-                        message: .localized(
-                            "Whoops!, something went wrong when extracting the file. \nMaybe try switching the extraction library in the settings?"
-                        )
-                    )
-                }
-                
-                if let index = DownloadManager.shared.getDownloadIndex(
-                    by: download.id
-                ) {
-                    DownloadManager.shared.downloads.remove(
-                        at: index
-                    )
-                }
-            }
-        }
-    }
+                    ) {
 
-    // MARK: - UI Helpers
-    
-    @ViewBuilder
-    private func swipeActions(
-        for file: FileItem
-    ) -> some View {
-        FileUIHelpers.swipeActions(
-            for: file,
-            viewModel: viewModel
-        )
-    }
+                    Storage.shared.deleteApp(
+                        for: signedApp
+                    )
 
-    @ViewBuilder
-    private func _sortActions() -> some View {
-        Section(.localized("Filter by")) {
-            ForEach(
-                FilesViewModel.SortOption.allCases,
-                id: \.displayName
-            ) { opt in
-                _sortButton(for: opt)
-            }
-        }
-    }
+                } else if let importedApp =
+                            importedApps.first(
+                                where: {
+                                    $0.uuid == appUUID
+                                }
+                            ) {
 
-    private func _sortButton(
-        for option: FilesViewModel.SortOption
-    ) -> some View {
-        Button {
-            if viewModel.sortOption == option {
-                viewModel.updateSort(
-                    option: option,
-                    ascending: !viewModel.sortAscending
-                )
-            } else {
-                viewModel.updateSort(
-                    option: option,
-                    ascending: true
-                )
-            }
-        } label: {
-            HStack {
-                Text(option.displayName)
-                
-                Spacer()
-                
-                if viewModel.sortOption == option {
-                    Image(
-                        systemName:
-                            viewModel.sortAscending
-                            ? "chevron.up"
-                            : "chevron.down"
+                    Storage.shared.deleteApp(
+                        for: importedApp
                     )
                 }
             }
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.3
+        ) {
+
+            selectedApps.removeAll()
         }
     }
 }
