@@ -7,7 +7,6 @@
 
 import SwiftUI
 import CoreData
-import UniformTypeIdentifiers
 import NimbleViews
 
 struct HomeView: View {
@@ -65,7 +64,7 @@ struct HomeView: View {
     // MARK: - Filtered Apps
 
     private var filteredImportedApps: [Imported] {
-        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if searchText.isEmpty {
             return Array(importedApps)
         }
 
@@ -76,7 +75,7 @@ struct HomeView: View {
     }
 
     private var filteredSignedApps: [Signed] {
-        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if searchText.isEmpty {
             return Array(signedApps)
         }
 
@@ -93,8 +92,7 @@ struct HomeView: View {
     // MARK: - Body
 
     var body: some View {
-        NBNavigationView("الرئيسية") {
-
+        NBNavigationView(.localized("Home")) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
 
@@ -109,7 +107,6 @@ struct HomeView: View {
                     // MARK: Applications
 
                     applicationsSection
-
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 30)
@@ -118,7 +115,7 @@ struct HomeView: View {
             .searchable(
                 text: $searchText,
                 placement: .platform(),
-                prompt: "البحث عن تطبيق"
+                prompt: .localized("Search")
             )
             .toolbar {
 
@@ -127,23 +124,27 @@ struct HomeView: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
+
                     if editMode.isEditing {
+
                         Menu {
 
                             Button {
                                 selectAllApps()
                             } label: {
                                 Label(
-                                    "تحديد الكل",
+                                    .localized("Select All"),
                                     systemImage: "checklist"
                                 )
                             }
 
-                            Button(role: .destructive) {
+                            Button(
+                                role: .destructive
+                            ) {
                                 deleteSelectedApps()
                             } label: {
                                 Label(
-                                    "حذف المحدد",
+                                    .localized("Delete"),
                                     systemImage: "trash"
                                 )
                             }
@@ -156,9 +157,7 @@ struct HomeView: View {
                     } else {
 
                         Menu {
-
                             importActions
-
                         } label: {
                             Image(systemName: "plus")
                         }
@@ -167,11 +166,13 @@ struct HomeView: View {
             }
             .environment(\.editMode, $editMode)
 
-            // MARK: Sheets
+            // MARK: App Info
 
             .sheet(item: $selectedInfoAppPresenting) { app in
                 LibraryInfoView(app: app.base)
             }
+
+            // MARK: Install
 
             .sheet(item: $selectedInstallAppPresenting) { app in
                 InstallPreviewView(
@@ -182,7 +183,11 @@ struct HomeView: View {
                 .presentationDragIndicator(.visible)
             }
 
-            .fullScreenCover(item: $selectedSigningAppPresenting) { app in
+            // MARK: Signing
+
+            .fullScreenCover(
+                item: $selectedSigningAppPresenting
+            ) { app in
                 SigningView(
                     app: app.base,
                     signAndInstall: app.signAndInstall
@@ -193,13 +198,19 @@ struct HomeView: View {
                 )
             }
 
-            .fullScreenCover(item: $selectedDylibsAppPresenting) { app in
+            // MARK: Dylibs
+
+            .fullScreenCover(
+                item: $selectedDylibsAppPresenting
+            ) { app in
                 DylibsView(app: app.base)
                     .compatNavigationTransition(
                         id: app.base.uuid ?? "",
                         ns: namespace
                     )
             }
+
+            // MARK: Bulk Signing
 
             .fullScreenCover(
                 isPresented: $isBulkSigningPresenting
@@ -220,6 +231,8 @@ struct HomeView: View {
                     ns: namespace
                 )
             }
+
+            // MARK: Bulk Install
 
             .sheet(
                 isPresented: $isBulkInstallingPresenting
@@ -242,7 +255,7 @@ struct HomeView: View {
                 .presentationDragIndicator(.visible)
             }
 
-            // MARK: Import
+            // MARK: File Import
 
             .sheet(isPresented: $isImporting) {
 
@@ -258,32 +271,33 @@ struct HomeView: View {
                 }
             }
 
-            // MARK: URL Download
+            // MARK: URL Import
 
             .alert(
-                "استيراد من رابط",
+                .localized("Import from URL"),
                 isPresented: $isDownloading
             ) {
 
                 TextField(
-                    "رابط IPA",
+                    .localized("URL"),
                     text: $downloadURL
                 )
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
-                Button("إلغاء", role: .cancel) {
+                Button(
+                    .localized("Cancel"),
+                    role: .cancel
+                ) {
                     downloadURL = ""
                 }
 
-                Button("استيراد") {
-
+                Button(.localized("OK")) {
                     importFromURL()
-
                 }
             }
 
-            // MARK: Install Notification
+            // MARK: Installation Notification
 
             .onReceive(
                 NotificationCenter.default.publisher(
@@ -298,12 +312,13 @@ struct HomeView: View {
                 }
             }
 
+            // MARK: Edit Mode
+
             .onChange(of: editMode) { state in
 
                 if !state.isEditing {
 
                     DispatchQueue.main.async {
-
                         withAnimation {
                             selectedApps.removeAll()
                         }
@@ -341,16 +356,17 @@ struct HomeView: View {
                     .font(.system(size: 32))
                     .foregroundStyle(.white)
 
-                Text("مرحباً بك")
+                Text(.localized("Welcome"))
                     .font(.largeTitle.bold())
                     .foregroundStyle(.white)
 
-                Text("تطبيقاتك في مكان واحد")
+                Text(.localized("Your Apps In One Place"))
                     .font(.headline)
                     .foregroundStyle(.white.opacity(0.9))
 
                 Text(
-                    "\(allAppsCount) تطبيق"
+                    "\(allAppsCount) " +
+                    .localized("Apps")
                 )
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.8))
@@ -374,28 +390,30 @@ struct HomeView: View {
         HStack(spacing: 12) {
 
             quickAction(
-                title: "استيراد",
-                icon: "square.and.arrow.down",
-                action: {
-                    isImporting = true
-                }
-            )
+                title: .localized("Import"),
+                icon: "square.and.arrow.down"
+            ) {
+                isImporting = true
+            }
 
             quickAction(
-                title: "من رابط",
-                icon: "link",
-                action: {
-                    isDownloading = true
-                }
-            )
+                title: .localized("From URL"),
+                icon: "link"
+            ) {
+                isDownloading = true
+            }
 
             quickAction(
-                title: "المكتبة",
-                icon: "square.grid.2x2",
-                action: {
-                    // سيتم ربطها لاحقاً عند تطوير التنقل
-                }
-            )
+                title: .localized("Library"),
+                icon: "square.grid.2x2"
+            ) {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name(
+                        "kinda.openLibrary"
+                    ),
+                    object: nil
+                )
+            }
         }
     }
 
@@ -410,7 +428,12 @@ struct HomeView: View {
             VStack(spacing: 8) {
 
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(
+                        .system(
+                            size: 20,
+                            weight: .semibold
+                        )
+                    )
 
                 Text(title)
                     .font(.caption)
@@ -419,10 +442,15 @@ struct HomeView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 70)
             .background(
-                Color(uiColor: .secondarySystemGroupedBackground)
+                Color(
+                    uiColor:
+                        .secondarySystemGroupedBackground
+                )
             )
             .clipShape(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(
+                    cornerRadius: 18
+                )
             )
         }
         .buttonStyle(.plain)
@@ -439,16 +467,14 @@ struct HomeView: View {
 
             HStack {
 
-                Text("التطبيقات")
+                Text(.localized("Applications"))
                     .font(.title2.bold())
 
                 Spacer()
 
-                Text(
-                    "\(allAppsCount)"
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                Text("\(allAppsCount)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
 
             if filteredImportedApps.isEmpty &&
@@ -458,17 +484,15 @@ struct HomeView: View {
 
             } else {
 
-                LazyVStack(
-                    spacing: 10
-                ) {
+                LazyVStack(spacing: 10) {
 
                     ForEach(
                         filteredImportedApps,
                         id: \.uuid
                     ) { app in
 
-                        appRow(
-                            app: app
+                        applicationRow(
+                            app
                         )
                     }
 
@@ -477,8 +501,8 @@ struct HomeView: View {
                         id: \.uuid
                     ) { app in
 
-                        appRow(
-                            app: app
+                        applicationRow(
+                            app
                         )
                     }
                 }
@@ -488,17 +512,22 @@ struct HomeView: View {
 
     // MARK: - Application Row
 
-    private func appRow<T: NSManagedObject & AppInfoPresentable>(
-        app: T
+    private func applicationRow(
+        _ app: AppInfoPresentable
     ) -> some View {
 
         LibraryCellView(
             app: app,
-            selectedInfoAppPresenting: $selectedInfoAppPresenting,
-            selectedSigningAppPresenting: $selectedSigningAppPresenting,
-            selectedInstallAppPresenting: $selectedInstallAppPresenting,
-            selectedAppDylibsPresenting: $selectedDylibsAppPresenting,
-            selectedApps: $selectedApps
+            selectedInfoAppPresenting:
+                $selectedInfoAppPresenting,
+            selectedSigningAppPresenting:
+                $selectedSigningAppPresenting,
+            selectedInstallAppPresenting:
+                $selectedInstallAppPresenting,
+            selectedAppDylibsPresenting:
+                $selectedDylibsAppPresenting,
+            selectedApps:
+                $selectedApps
         )
         .compatMatchedTransitionSource(
             id: app.uuid ?? "",
@@ -512,15 +541,20 @@ struct HomeView: View {
 
         VStack(spacing: 14) {
 
-            Image(systemName: "square.grid.2x2")
-                .font(.system(size: 42))
-                .foregroundStyle(.secondary)
+            Image(
+                systemName:
+                    "square.grid.2x2"
+            )
+            .font(.system(size: 42))
+            .foregroundStyle(.secondary)
 
-            Text("لا توجد تطبيقات")
+            Text(.localized("No Apps"))
                 .font(.headline)
 
             Text(
-                "ابدأ باستيراد ملف IPA لإضافته إلى الرئيسية."
+                .localized(
+                    "Get started by importing your first IPA file."
+                )
             )
             .font(.subheadline)
             .foregroundStyle(.secondary)
@@ -531,15 +565,13 @@ struct HomeView: View {
             } label: {
 
                 Label(
-                    "استيراد تطبيق",
+                    .localized("Import"),
                     systemImage: "plus"
                 )
                 .bg()
             }
         }
-        .frame(
-            maxWidth: .infinity
-        )
+        .frame(maxWidth: .infinity)
         .padding(.vertical, 35)
     }
 
@@ -553,7 +585,7 @@ struct HomeView: View {
         } label: {
 
             Label(
-                "استيراد من الملفات",
+                .localized("Import from Files"),
                 systemImage: "folder"
             )
         }
@@ -563,7 +595,7 @@ struct HomeView: View {
         } label: {
 
             Label(
-                "استيراد من رابط",
+                .localized("Import from URL"),
                 systemImage: "globe"
             )
         }
@@ -595,14 +627,14 @@ struct HomeView: View {
                 dl: download
             ) { error in
 
-                DispatchQueue.main.async {
+                if error != nil {
 
-                    if error != nil {
+                    DispatchQueue.main.async {
 
                         UIAlertController.showAlertWithOk(
                             title: .localized("Error"),
                             message: .localized(
-                                "حدث خطأ أثناء استيراد التطبيق."
+                                "Whoops!, something went wrong when extracting the file."
                             )
                         )
                     }
@@ -616,10 +648,9 @@ struct HomeView: View {
     private func importFromURL() {
 
         let value =
-            downloadURL
-                .trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                )
+            downloadURL.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
 
         guard
             !value.isEmpty,
@@ -629,7 +660,7 @@ struct HomeView: View {
             UIAlertController.showAlertWithOk(
                 title: .localized("Error"),
                 message: .localized(
-                    "الرابط غير صالح."
+                    "The URL is invalid."
                 )
             )
 
@@ -674,8 +705,7 @@ struct HomeView: View {
             return
         }
 
-        let appsToDelete =
-            selectedApps
+        let appsToDelete = selectedApps
 
         withAnimation(
             .easeInOut(duration: 0.3)
@@ -685,7 +715,9 @@ struct HomeView: View {
 
                 if let signedApp =
                     signedApps.first(
-                        where: { $0.uuid == id }
+                        where: {
+                            $0.uuid == id
+                        }
                     ) {
 
                     Storage.shared.deleteApp(
@@ -694,7 +726,9 @@ struct HomeView: View {
 
                 } else if let importedApp =
                     importedApps.first(
-                        where: { $0.uuid == id }
+                        where: {
+                            $0.uuid == id
+                        }
                     ) {
 
                     Storage.shared.deleteApp(
