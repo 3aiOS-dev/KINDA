@@ -100,16 +100,24 @@ struct HomeView: View {
                         Section {
                             if visibleApps.isEmpty {
                                 emptyState
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 24)
                             } else {
-                                ForEach(visibleApps) { app in
-                                    if selectedAppID == app.id {
-                                        expandedItem(app)
-                                            .padding(.horizontal, 16)
-                                            .padding(.bottom, 14)
-                                    } else {
-                                        rowView(app)
-                                            .padding(.horizontal, 16)
-                                            .padding(.bottom, 12)
+                                VStack(spacing: 0) {
+                                    ForEach(Array(visibleApps.enumerated()), id: \.element.id) { index, app in
+                                        if selectedAppID == app.id {
+                                            expandedItem(app)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 14)
+                                        } else {
+                                            rowView(app)
+                                                .padding(.horizontal, 16)
+
+                                            if index < visibleApps.count - 1 {
+                                                Divider()
+                                                    .padding(.leading, 16 + 42 + 12)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -121,7 +129,7 @@ struct HomeView: View {
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
                             }
-                            .background(.ultraThinMaterial)
+                            .background(KindaTheme.pageBG)
                             .zIndex(2)
                         }
                     }
@@ -160,7 +168,6 @@ struct HomeView: View {
             .padding(.horizontal, 20)
             .padding(.top, 24)
             .padding(.bottom, 16)
-            .background(.ultraThinMaterial)
             .environment(\.layoutDirection, .rightToLeft)
     }
 
@@ -256,6 +263,8 @@ struct HomeView: View {
     }
 
     // MARK: Collapsed Row
+    /// صف مسطّح تماماً بدون أي بطاقة أو خلفية خلفه — تماماً كخلايا القائمة
+    /// في تطبيق الإعدادات (Settings) الظاهرة في الصور المرجعية.
     private func rowView(_ app: StoreApp) -> some View {
         HStack(spacing: 12) {
             Button {
@@ -264,11 +273,11 @@ struct HomeView: View {
                 }
             } label: {
                 HStack(spacing: 12) {
-                    StoreIconView(urlString: app.iconURL, size: 44)
+                    StoreIconView(urlString: app.iconURL, size: 42)
 
-                    VStack(alignment: .trailing, spacing: 3) {
+                    VStack(alignment: .trailing, spacing: 2) {
                         Text(app.name)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -286,7 +295,7 @@ struct HomeView: View {
                                 Text(app.version)
                             }
                         }
-                        .font(.caption)
+                        .font(.system(size: 11, weight: .regular))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -299,14 +308,9 @@ struct HomeView: View {
 
             getButton(app)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 0.7)
-        }
+        // بدون background وبدون overlay — لا توجد أي بطاقة خلف الصف.
     }
 
     // MARK: Primary Get / Install Button
@@ -316,22 +320,25 @@ struct HomeView: View {
         return Button {
             install(app)
         } label: {
-            HStack(spacing: 0) {
+            HStack(spacing: 4) {
                 if loading {
                     ProgressView()
-                        .controlSize(.small)
-                        .tint(.primary)
-                        .padding(.trailing, 6)
+                        .controlSize(.mini)
+                        .tint(.secondary)
                 }
 
                 Text(loading ? "جاري التنزيل" : "تثبيت")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
             }
             .foregroundStyle(.primary)
-            .padding(.horizontal, 13)
-            .frame(height: 38)
-            .background(Color.primary.opacity(0.09), in: Capsule())
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(Color.secondary.opacity(0.14), in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.6)
+            }
         }
         .buttonStyle(.plain)
         .disabled(loading)
