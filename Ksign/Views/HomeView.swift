@@ -21,6 +21,40 @@ enum KindaTheme {
     static var chipBG: Color { Color.secondary.opacity(0.12) }
 }
 
+/// خلفية شبكية خفيفة مشابهة لتصميم المتجر في الصورة.
+struct KindaGridBackground: View {
+    private let spacing: CGFloat = 48
+    private let lineOpacity: Double = 0.045
+
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+
+            var x: CGFloat = 0
+            while x <= size.width {
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+                x += spacing
+            }
+
+            var y: CGFloat = 0
+            while y <= size.height {
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+                y += spacing
+            }
+
+            context.stroke(
+                path,
+                with: .color(.primary.opacity(lineOpacity)),
+                lineWidth: 0.7
+            )
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
+    }
+}
+
 // MARK: - Home View
 
 struct HomeView: View {
@@ -59,6 +93,8 @@ struct HomeView: View {
                 KindaTheme.pageBG
                     .ignoresSafeArea()
 
+                KindaGridBackground()
+
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                         Section {
@@ -85,10 +121,7 @@ struct HomeView: View {
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
                             }
-                            .background {
-                                KindaTheme.pageBG
-                                    .opacity(0.94)
-                            }
+                            .background(.ultraThinMaterial)
                             .zIndex(2)
                         }
                     }
@@ -96,23 +129,11 @@ struct HomeView: View {
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.immediately)
+                .environment(\.layoutDirection, .rightToLeft)
                 .refreshable {
                     await storeManager.load()
                 }
-                .overlay(alignment: .top) {
-                    LinearGradient(
-                        colors: [
-                            KindaTheme.pageBG.opacity(0.98),
-                            KindaTheme.pageBG.opacity(0.70),
-                            .clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 92)
-                    .ignoresSafeArea(edges: .top)
-                    .allowsHitTesting(false)
-                }
+
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -139,23 +160,8 @@ struct HomeView: View {
             .padding(.horizontal, 20)
             .padding(.top, 24)
             .padding(.bottom, 16)
-            .background {
-                LinearGradient(
-                    colors: [
-                        KindaTheme.pageBG.opacity(0.96),
-                        KindaTheme.pageBG.opacity(0.68),
-                        .clear
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .blur(radius: 14)
-                .padding(.horizontal, -22)
-                .padding(.top, -12)
-                .padding(.bottom, -8)
-                .allowsHitTesting(false)
-            }
-            .environment(\.layoutDirection, .leftToRight)
+            .background(.ultraThinMaterial)
+            .environment(\.layoutDirection, .rightToLeft)
     }
 
     // MARK: Search
@@ -207,7 +213,7 @@ struct HomeView: View {
                 .buttonStyle(.plain)
             }
         }
-        .environment(\.layoutDirection, .leftToRight)
+        .environment(\.layoutDirection, .rightToLeft)
         .padding(.horizontal, 12)
         .frame(height: 42)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -260,11 +266,12 @@ struct HomeView: View {
                 HStack(spacing: 12) {
                     StoreIconView(urlString: app.iconURL, size: 44)
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .trailing, spacing: 3) {
                         Text(app.name)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
 
                         HStack(spacing: 4) {
                             if !app.category.isEmpty {
@@ -282,8 +289,9 @@ struct HomeView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .contentShape(Rectangle())
             }
@@ -308,14 +316,12 @@ struct HomeView: View {
         return Button {
             install(app)
         } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: 0) {
                 if loading {
                     ProgressView()
                         .controlSize(.small)
                         .tint(.primary)
-                } else {
-                    Image(systemName: "arrow.down")
-                        .font(.system(size: 13, weight: .bold))
+                        .padding(.trailing, 6)
                 }
 
                 Text(loading ? "جاري التنزيل" : "تثبيت")
@@ -342,10 +348,10 @@ struct HomeView: View {
                         selectedAppID = nil
                     }
                 } label: {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "arrow.right")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.primary)
-                        .frame(width: 48, height: 48)
+                        .frame(width: 42, height: 42)
                         .background(.regularMaterial, in: Circle())
                         .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
                 }
@@ -421,7 +427,6 @@ struct HomeView: View {
                 HStack(spacing: 12) {
                     pillButton(
                         title: "تكرار",
-                        systemImage: "arrow.clockwise",
                         isLoading: isDownloading(app)
                     ) {
                         repeatDownload(app)
@@ -429,13 +434,13 @@ struct HomeView: View {
 
                     pillButton(
                         title: "تثبيت",
-                        systemImage: "arrow.down",
                         isLoading: isDownloading(app)
                     ) {
                         install(app)
                     }
                 }
             }
+            .environment(\.layoutDirection, .rightToLeft)
             .padding(.vertical, 44)
             .padding(.horizontal, 24)
         }
@@ -450,18 +455,14 @@ struct HomeView: View {
 
     private func pillButton(
         title: String,
-        systemImage: String,
         isLoading: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 7) {
+            HStack(spacing: 6) {
                 if isLoading {
                     ProgressView()
                         .tint(.white)
-                } else {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 13, weight: .bold))
                 }
 
                 Text(title)
@@ -478,29 +479,31 @@ struct HomeView: View {
 
     // MARK: Stats
     private func statsRow(_ app: StoreApp) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             statBox(title: "حجم التطبيق", value: app.sizeValueText)
             statBox(title: "الإصدار", value: app.version)
         }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func statBox(title: String, value: String) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 2) {
             Text(title)
-                .font(.footnote)
+                .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
 
             Text(value.isEmpty ? "—" : value)
-                .font(.title3.weight(.bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .frame(width: 104, height: 46)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 0.7)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 0.6)
         }
     }
 
