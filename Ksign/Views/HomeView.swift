@@ -2,7 +2,8 @@
 //  HomeView.swift
 //  Ksign
 //
-//  التطبيقات — قائمة + بطاقة موسّعة، مطابقة للتصميم في الصور
+//  الرئيسية — تصميم متجر التطبيقات مع الحفاظ على وظائف المتجر الأصلية
+//  والتنزيل الفعلي والاستيراد إلى المكتبة والتكرار.
 //
 
 import SwiftUI
@@ -12,7 +13,6 @@ import NimbleViews
 // MARK: - Theme
 
 enum KindaTheme {
-
     static let purple = Color(red: 0.35, green: 0.20, blue: 0.95)
     static let purpleLight = Color(red: 0.58, green: 0.42, blue: 0.98)
 
@@ -21,10 +21,9 @@ enum KindaTheme {
     static var chipBG: Color { Color.secondary.opacity(0.12) }
 }
 
-// MARK: - Home View (Store Only)
+// MARK: - Home View
 
 struct HomeView: View {
-
     // MARK: Managers
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var storeManager = KindaStoreManager.shared
@@ -32,12 +31,13 @@ struct HomeView: View {
     // MARK: State
     @State private var searchText = ""
     @State private var selectedAppID: String?
+    @FocusState private var searchFieldFocused: Bool
 
-    // تنزيلات المتجر التي تنتظر اكتمال الاستيراد إلى المكتبة
-    @State private var activeDownloads: [String: String] = [:] // appID -> downloadID
+    // تنزيلات المتجر التي تنتظر اكتمال الاستيراد إلى المكتبة.
+    @State private var activeDownloads: [String: String] = [:]
     @State private var downloadWatchTasks: [String: Task<Void, Never>] = [:]
 
-    // MARK: Core Data (لمتابعة اكتمال الاستيراد فقط)
+    // MARK: Core Data
     @FetchRequest(
         entity: Imported.entity(),
         sortDescriptors: [
@@ -48,44 +48,73 @@ struct HomeView: View {
     private var importedApps: FetchedResults<Imported>
 
     // MARK: Derived
-
     private var visibleApps: [StoreApp] {
         storeManager.filtered(searchText)
     }
 
     // MARK: Body
-
     var body: some View {
-
-        ZStack(alignment: .top) {
-
-            KindaTheme.pageBG.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-
-                titleHeader
-                searchBar
+        NavigationStack {
+            ZStack {
+                KindaTheme.pageBG
+                    .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-
-                    LazyVStack(spacing: 14) {
-
-                        ForEach(visibleApps) { app in
-
-                            if selectedAppID == app.id {
-                                expandedItem(app)
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        Section {
+                            if visibleApps.isEmpty {
+                                emptyState
                             } else {
-                                rowView(app)
+                                ForEach(visibleApps) { app in
+                                    if selectedAppID == app.id {
+                                        expandedItem(app)
+                                            .padding(.horizontal, 16)
+                                            .padding(.bottom, 14)
+                                    } else {
+                                        rowView(app)
+                                            .padding(.horizontal, 16)
+                                            .padding(.bottom, 12)
+                                    }
+                                }
                             }
+                        } header: {
+                            VStack(spacing: 0) {
+                                titleHeader
+
+                                searchBar
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                            }
+                            .background {
+                                KindaTheme.pageBG
+                                    .opacity(0.94)
+                            }
+                            .zIndex(2)
                         }
                     }
-                    .padding(.top, 10)
                     .padding(.bottom, 40)
                 }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.immediately)
                 .refreshable {
                     await storeManager.load()
                 }
+                .overlay(alignment: .top) {
+                    LinearGradient(
+                        colors: [
+                            KindaTheme.pageBG.opacity(0.98),
+                            KindaTheme.pageBG.opacity(0.70),
+                            .clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 92)
+                    .ignoresSafeArea(edges: .top)
+                    .allowsHitTesting(false)
+                }
             }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .environment(\.layoutDirection, .rightToLeft)
         .task {
@@ -94,180 +123,278 @@ struct HomeView: View {
             }
         }
         .onDisappear {
-            for task in downloadWatchTasks.values { task.cancel() }
+            for task in downloadWatchTasks.values {
+                task.cancel()
+            }
             downloadWatchTasks.removeAll()
         }
     }
 
     // MARK: Title
-
     private var titleHeader: some View {
-
-        Text("التطبيقات")
-            .font(.system(size: 34, weight: .bold))
+        Text("الرئيسية")
+            .font(.system(size: 32, weight: .bold))
+            .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+            .background {
+                LinearGradient(
+                    colors: [
+                        KindaTheme.pageBG.opacity(0.96),
+                        KindaTheme.pageBG.opacity(0.68),
+                        .clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .blur(radius: 14)
+                .padding(.horizontal, -22)
+                .padding(.top, -12)
+                .padding(.bottom, -8)
+                .allowsHitTesting(false)
+            }
+            .environment(\.layoutDirection, .leftToRight)
     }
 
     // MARK: Search
-
     private var searchBar: some View {
-
-        HStack(spacing: 10) {
-
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-
-            TextField("ألعاب وتطبيقات والمزيد", text: $searchText)
+        HStack(spacing: 8) {
+            // نحافظ على ترتيب التصميم بصرياً داخل RTL.
+            TextField("", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, alignment: .trailing)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .font(.callout)
+                .submitLabel(.done)
+                .focused($searchFieldFocused)
+                .onSubmit {
+                    searchFieldFocused = false
+                }
+                .overlay(alignment: .trailing) {
+                    if searchText.isEmpty {
+                        Text("ألعاب وتطبيقات والمزيد")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.secondary.opacity(0.65))
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .allowsHitTesting(false)
+                    }
+                }
 
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    searchFieldFocused = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 30, height: 30)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.secondary.opacity(0.10))
-        )
+        .environment(\.layoutDirection, .leftToRight)
+        .padding(.horizontal, 12)
+        .frame(height: 42)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 0.7)
+        }
+    }
+
+    // MARK: Empty State
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "square.grid.2x2")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            Text(searchText.isEmpty ? "لا توجد تطبيقات بعد" : "لا توجد نتائج")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.primary)
+
+            Text(
+                searchText.isEmpty
+                    ? "أضف تطبيقاً من لوحة التحكم ليظهر هنا مباشرة."
+                    : "جرّب البحث باسم التطبيق أو Bundle ID."
+            )
+            .font(.system(size: 11, weight: .regular, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+        .padding(.horizontal, 20)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 0.7)
+        }
         .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        .padding(.top, 24)
     }
 
     // MARK: Collapsed Row
-
     private func rowView(_ app: StoreApp) -> some View {
-
-        HStack(spacing: 14) {
-
-            HStack(spacing: 14) {
-
-                StoreIconView(urlString: app.iconURL, size: 56)
-
-                Text(app.name)
-                    .font(.headline)
-                    .lineLimit(1)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.snappy) { selectedAppID = app.id }
-            }
-
-            Spacer(minLength: 8)
-
+        HStack(spacing: 12) {
             Button {
-                install(app)
-            } label: {
-
-                Group {
-                    if isDownloading(app) {
-                        ProgressView()
-                            .tint(.primary)
-                            .frame(width: 30)
-                    } else {
-                        Text("تثبيت")
-                            .font(.subheadline.weight(.bold))
-                    }
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                    selectedAppID = app.id
                 }
-                .padding(.horizontal, 26)
-                .padding(.vertical, 12)
-                .background(Capsule().fill(Color.secondary.opacity(0.12)))
+            } label: {
+                HStack(spacing: 12) {
+                    StoreIconView(urlString: app.iconURL, size: 44)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(app.name)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+
+                        HStack(spacing: 4) {
+                            if !app.category.isEmpty {
+                                Text(app.category)
+                            }
+
+                            if !app.category.isEmpty && !app.version.isEmpty {
+                                Text("•")
+                            }
+
+                            if !app.version.isEmpty {
+                                Text(app.version)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(isDownloading(app))
+
+            getButton(app)
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(KindaTheme.cardBG)
-        )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 0.7)
+        }
     }
 
-    // MARK: Expanded Item (Row + Card + Stats)
+    // MARK: Primary Get / Install Button
+    private func getButton(_ app: StoreApp) -> some View {
+        let loading = isDownloading(app)
 
+        return Button {
+            install(app)
+        } label: {
+            HStack(spacing: 7) {
+                if loading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.primary)
+                } else {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 13, weight: .bold))
+                }
+
+                Text(loading ? "جاري التنزيل" : "تثبيت")
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 13)
+            .frame(height: 38)
+            .background(Color.primary.opacity(0.09), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(loading)
+    }
+
+    // MARK: Expanded Item
     private func expandedItem(_ app: StoreApp) -> some View {
-
         VStack(spacing: 10) {
-
             ZStack(alignment: .topTrailing) {
-
                 expandedCard(app)
 
-                collapseButton
-                    .padding(.top, -28)
-                    .padding(.trailing, 28)
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                        selectedAppID = nil
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 48, height: 48)
+                        .background(.regularMaterial, in: Circle())
+                        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 12)
+                .padding(.trailing, 12)
             }
 
             statsRow(app)
         }
-        .padding(.horizontal, 16)
     }
 
-    private var collapseButton: some View {
-
-        Button {
-            withAnimation(.snappy) { selectedAppID = nil }
-        } label: {
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(Color.primary)
-                .frame(width: 56, height: 56)
-                .background(Circle().fill(Color.white))
-                .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: Expanded Card (blurred icon background)
-
+    // MARK: Expanded Card
     private func expandedCard(_ app: StoreApp) -> some View {
-
         ZStack {
-
             GeometryReader { proxy in
-
                 AsyncImage(url: URL(string: app.iconURL)) { image in
-
                     image
                         .resizable()
                         .scaledToFill()
-
                 } placeholder: {
-                    Color.black
+                    Rectangle()
+                        .fill(Color.black)
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)
-                .blur(radius: 60)
-                .overlay(Color.black.opacity(0.45))
+                .blur(radius: 58)
+                .overlay(Color.black.opacity(0.46))
                 .clipped()
             }
 
-            VStack(spacing: 18) {
+            // طبقة زجاجية خفيفة فوق الخلفية الضبابية.
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(0.20)
 
-                StoreIconView(urlString: app.iconURL, size: 150)
+            VStack(spacing: 16) {
+                StoreIconView(urlString: app.iconURL, size: 132)
                     .shadow(color: .black.opacity(0.35), radius: 16, y: 10)
 
                 Text(app.name)
-                    .font(.system(size: 26, weight: .heavy))
-                    .foregroundStyle(Color.white)
+                    .font(.system(size: 25, weight: .heavy))
+                    .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .lineLimit(2)
 
                 if !app.appDescription.isEmpty {
                     Text(app.appDescription)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.86))
                         .multilineTextAlignment(.center)
                         .lineLimit(3)
                 }
@@ -288,83 +415,96 @@ struct HomeView: View {
                         }
                     }
                     .font(.caption)
-                    .foregroundStyle(Color.white.opacity(0.72))
+                    .foregroundStyle(.white.opacity(0.72))
                 }
 
                 HStack(spacing: 12) {
-
-                    pillButton(title: "تكرار", isLoading: isDownloading(app)) {
+                    pillButton(
+                        title: "تكرار",
+                        systemImage: "arrow.clockwise",
+                        isLoading: isDownloading(app)
+                    ) {
                         repeatDownload(app)
                     }
 
-                    pillButton(title: "تثبيت", isLoading: isDownloading(app)) {
+                    pillButton(
+                        title: "تثبيت",
+                        systemImage: "arrow.down",
+                        isLoading: isDownloading(app)
+                    ) {
                         install(app)
                     }
                 }
             }
-            .padding(.vertical, 46)
+            .padding(.vertical, 44)
             .padding(.horizontal, 24)
         }
         .frame(maxWidth: .infinity)
         .frame(minHeight: 380)
-        .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+        }
     }
 
-    private func pillButton(title: String, isLoading: Bool = false, action: @escaping () -> Void) -> some View {
-
+    private func pillButton(
+        title: String,
+        systemImage: String,
+        isLoading: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
-
-            HStack(spacing: 8) {
-
+            HStack(spacing: 7) {
                 if isLoading {
-                    ProgressView().tint(Color.white)
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 13, weight: .bold))
                 }
 
                 Text(title)
-                    .font(.subheadline.weight(.bold))
+                    .font(.system(size: 13, weight: .bold))
             }
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, 30)
-            .padding(.vertical, 14)
-            .background(Capsule().fill(Color.white.opacity(0.22)))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 24)
+            .frame(height: 44)
+            .background(Color.white.opacity(0.22), in: Capsule())
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
     }
 
-    // MARK: Stats Row (حجم التطبيق / الإصدار)
-
+    // MARK: Stats
     private func statsRow(_ app: StoreApp) -> some View {
-
         HStack(spacing: 12) {
-
             statBox(title: "حجم التطبيق", value: app.sizeValueText)
             statBox(title: "الإصدار", value: app.version)
         }
     }
 
     private func statBox(title: String, value: String) -> some View {
-
         VStack(spacing: 6) {
-
             Text(title)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
             Text(value.isEmpty ? "—" : value)
                 .font(.title3.weight(.bold))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .background(
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.secondary.opacity(0.08))
-        )
+                .stroke(Color.primary.opacity(0.06), lineWidth: 0.7)
+        }
     }
 
     // MARK: Downloads
-
     private func isDownloading(_ app: StoreApp) -> Bool {
         activeDownloads[app.id] != nil
     }
@@ -380,7 +520,6 @@ struct HomeView: View {
     }
 
     private func startStoreDownload(for app: StoreApp) {
-
         guard !isDownloading(app) else { return }
 
         guard
@@ -395,15 +534,12 @@ struct HomeView: View {
             return
         }
 
-        // UUIDs الموجودة قبل التنزيل. بهذا لا نعتبر نسخة قديمة
-        // موجودة في المكتبة نجاحاً للمحاولة الجديدة.
+        // نلتقط السجلات الموجودة قبل بدء المحاولة حتى لا تعتبر نسخة قديمة نجاحاً.
         let existingImportedUUIDs = Set(
             importedApps.compactMap { $0.uuid }
         )
 
         let startedAt = Date()
-
-        // ID مختلف لكل محاولة، حتى يعمل «تكرار» فعلياً.
         let downloadID = "KindaStore_\(app.id)_\(UUID().uuidString)"
 
         let download = downloadManager.startDownload(
@@ -425,24 +561,20 @@ struct HomeView: View {
 // MARK: - Store Download Handling
 
 extension HomeView {
-
     /// ينتظر اكتمال تنزيل IPA ثم اكتمال استيراده فعلياً إلى Core Data.
-    /// اختفاء Download من DownloadManager لا يعني فشلاً؛ لأن المدير قد
-    /// يحذف عنصر التنزيل بعد تسليم الملف إلى FR.handlePackageFile.
+    /// اختفاء Download من DownloadManager لا يعني فشلاً، لأن المدير قد يحذف
+    /// عنصر التنزيل بعد تسليم الملف إلى معالجة الاستيراد.
     private func watchStoreDownload(
         _ download: Download,
         app: StoreApp,
         existingImportedUUIDs: Set<String>,
         startedAt: Date
     ) {
-
         let downloadID = download.id
 
         downloadWatchTasks[downloadID]?.cancel()
 
         let task = Task { @MainActor in
-
-            // 15 دقيقة كحد أقصى لملفات IPA الكبيرة أو الاتصالات البطيئة.
             let timeout: UInt64 = 15 * 60 * 1_000_000_000
             let pollInterval: UInt64 = 300_000_000
             let deadline = DispatchTime.now().uptimeNanoseconds + timeout
@@ -450,8 +582,7 @@ extension HomeView {
             var reachedDownloadCompletion = false
 
             while !Task.isCancelled {
-
-                // معيار النجاح الحقيقي: ظهور Imported جديد لهذه المحاولة.
+                // النجاح الحقيقي هو ظهور Imported جديد ناتج عن المحاولة الحالية.
                 if let imported = findNewImportedApp(
                     for: app,
                     existingUUIDs: existingImportedUUIDs,
@@ -466,16 +597,13 @@ extension HomeView {
                     return
                 }
 
-                if let currentDownload = DownloadManager.shared.getDownload(
-                    by: downloadID
-                ) {
+                if let currentDownload = DownloadManager.shared.getDownload(by: downloadID) {
                     if currentDownload.totalBytes > 0,
                        currentDownload.progress >= 0.999 {
                         reachedDownloadCompletion = true
                     }
                 } else if reachedDownloadCompletion {
-                    // التنزيل انتهى، لكن الاستيراد قد يحتاج وقتاً.
-                    // نستمر بالمراقبة بدلاً من عرض خطأ كاذب.
+                    // اكتمل التنزيل لكن الاستيراد قد يحتاج وقتاً إضافياً.
                 }
 
                 if DispatchTime.now().uptimeNanoseconds >= deadline {
@@ -487,7 +615,6 @@ extension HomeView {
 
             guard !Task.isCancelled else { return }
 
-            // فحص نهائي بعد انتهاء التنزيل/المعالجة.
             if let imported = findNewImportedApp(
                 for: app,
                 existingUUIDs: existingImportedUUIDs,
@@ -519,9 +646,7 @@ extension HomeView {
         existingUUIDs: Set<String>,
         startedAt: Date
     ) -> Imported? {
-
         importedApps.first { imported in
-
             guard
                 let uuid = imported.uuid,
                 !existingUUIDs.contains(uuid)
@@ -550,7 +675,7 @@ extension HomeView {
                 return true
             }
 
-            // وأخيراً الاسم وحده كحل احتياطي.
+            // وأخيراً الاسم كحل احتياطي.
             if let name = imported.name {
                 return name.localizedCaseInsensitiveCompare(app.name) == .orderedSame
             }
@@ -566,7 +691,6 @@ extension HomeView {
         success: Bool,
         imported: Imported?
     ) {
-
         activeDownloads[app.id] = nil
         downloadWatchTasks[downloadID] = nil
 
@@ -580,7 +704,7 @@ extension HomeView {
             return
         }
 
-        // التطبيق أصبح Imported فعلياً؛ الآن افتح المكتبة.
+        // أصبح التطبيق Imported فعلياً؛ افتح المكتبة بعد نجاح الاستيراد فقط.
         DispatchQueue.main.async {
             NotificationCenter.default.post(
                 name: NSNotification.Name("ksign.openLibraryTab"),
@@ -593,7 +717,6 @@ extension HomeView {
 // MARK: - Store Model (Lovable Cloud)
 
 struct StoreApp: Identifiable, Decodable, Hashable {
-
     let id: String
     let name: String
     let version: String
@@ -616,9 +739,8 @@ struct StoreApp: Identifiable, Decodable, Hashable {
         case sizeMB = "size_mb"
     }
 
-    /// نص الحجم جاهز للعرض (MB أو GB) — يرجع nil إن لم يُضف حجم.
+    /// نص الحجم جاهز للعرض (MB أو GB).
     var sizeText: String? {
-
         guard let sizeMB, sizeMB > 0 else { return nil }
 
         if sizeMB >= 1024 {
@@ -628,14 +750,13 @@ struct StoreApp: Identifiable, Decodable, Hashable {
         return String(format: "%.0f MB", sizeMB)
     }
 
-    /// رقم الحجم فقط بمنزلة عشرية واحدة (لبطاقة الإحصائيات)، بدون وحدة.
+    /// رقم الحجم فقط بمنزلة عشرية واحدة لبطاقة الإحصائيات.
     var sizeValueText: String {
-
         guard let sizeMB, sizeMB > 0 else { return "—" }
         return String(format: "%.1f", sizeMB)
     }
 
-    /// معرّف مختصر (آخر جزء من bundle id)
+    /// معرّف مختصر.
     var shortIdentifier: String {
         bundleId.split(separator: ".").last.map(String.init) ?? bundleId
     }
@@ -645,10 +766,9 @@ struct StoreApp: Identifiable, Decodable, Hashable {
 
 @MainActor
 final class KindaStoreManager: ObservableObject {
-
     static let shared = KindaStoreManager()
 
-    // بيانات الاتصال بلوحة التحكم (Lovable Cloud)
+    // بيانات الاتصال بلوحة التحكم (Lovable Cloud).
     private let baseURL = "https://ibskoyypugseeixzntyt.supabase.co"
     private let apiKey = "sb_publishable_McRq3FTx_r7pL2PbGk8YBA_mMnJmtFm"
 
@@ -659,7 +779,6 @@ final class KindaStoreManager: ObservableObject {
     private init() {}
 
     func filtered(_ searchText: String) -> [StoreApp] {
-
         guard !searchText.isEmpty else { return apps }
 
         return apps.filter {
@@ -669,17 +788,19 @@ final class KindaStoreManager: ObservableObject {
     }
 
     func load() async {
-
         isLoading = true
         errorMessage = nil
 
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+        }
 
-        guard
-            let url = URL(
-                string: "\(baseURL)/rest/v1/store_apps?select=*&order=created_at.desc"
-            )
-        else { return }
+        guard let url = URL(
+            string: "\(baseURL)/rest/v1/store_apps?select=*&order=created_at.desc"
+        ) else {
+            errorMessage = "Invalid store URL."
+            return
+        }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -688,7 +809,13 @@ final class KindaStoreManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse,
+               !(200...299).contains(httpResponse.statusCode) {
+                throw URLError(.badServerResponse)
+            }
+
             apps = try JSONDecoder().decode([StoreApp].self, from: data)
         } catch {
             errorMessage = error.localizedDescription
@@ -699,29 +826,47 @@ final class KindaStoreManager: ObservableObject {
 // MARK: - Store Icon
 
 struct StoreIconView: View {
-
     let urlString: String
     let size: CGFloat
 
     var body: some View {
+        AsyncImage(url: URL(string: urlString)) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
 
-        AsyncImage(url: URL(string: urlString)) { image in
+            case .failure:
+                placeholder
 
-            image
-                .resizable()
-                .scaledToFill()
+            case .empty:
+                placeholder
 
-        } placeholder: {
-
-            RoundedRectangle(cornerRadius: size / 4.5, style: .continuous)
-                .fill(Color.secondary.opacity(0.15))
-                .overlay(
-                    Image(systemName: "app.dashed")
-                        .font(.system(size: size / 3, weight: .light))
-                        .foregroundStyle(.secondary)
-                )
+            @unknown default:
+                placeholder
+            }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size / 4.5, style: .continuous))
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: size / 4.5,
+                style: .continuous
+            )
+        )
+        .contentShape(Rectangle())
+    }
+
+    private var placeholder: some View {
+        RoundedRectangle(
+            cornerRadius: size / 4.5,
+            style: .continuous
+        )
+        .fill(Color.secondary.opacity(0.15))
+        .overlay {
+            Image(systemName: "app.dashed")
+                .font(.system(size: size / 3, weight: .light))
+                .foregroundStyle(.secondary)
+        }
     }
 }
