@@ -2,7 +2,7 @@
 //  HomeView.swift
 //  Ksign
 //
-//  متجر KINDA — تصميم كامل مطابق للصور
+//  متجر IQIraq — تصميم كامل مطابق للصور
 //  بدون تقييم نجوم وبدون عدد التحميلات
 //
 
@@ -144,54 +144,11 @@ struct HomeView: View {
 
     private var header: some View {
 
-        HStack(spacing: 12) {
-
-            HStack(spacing: 10) {
-
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(KindaTheme.gradient)
-                        .frame(width: 46, height: 46)
-
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Color.white)
-                }
-
-                VStack(alignment: .trailing, spacing: 0) {
-
-                    Text("KINDA")
-                        .font(.system(size: 20, weight: .heavy))
-
-                    Text("متجر التطبيقات")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-
-            HStack(spacing: 10) {
-
-                headerIcon("square.grid.2x2.fill", active: true)
-                headerIcon("bell", active: false)
-                headerIcon("shield", active: false)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-
-    private func headerIcon(_ name: String, active: Bool) -> some View {
-
-        Image(systemName: name)
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(active ? Color.white : Color.primary)
-            .frame(width: 40, height: 40)
-            .background(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(active ? AnyShapeStyle(KindaTheme.gradient) : AnyShapeStyle(Color.clear))
-            )
+        Text("IQIraq")
+            .font(.system(size: 20, weight: .heavy))
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
     }
 
     // MARK: Search
@@ -368,10 +325,12 @@ struct HomeView: View {
                     .font(.subheadline.weight(.bold))
                     .lineLimit(1)
 
-                Text(app.category.isEmpty ? "KINDA" : app.category)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if !app.category.isEmpty {
+                    Text(app.category)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Text(app.sizeText ?? "v\(app.version)")
@@ -665,10 +624,6 @@ struct StoreCellView: View {
                     .font(.headline)
                     .lineLimit(1)
 
-                Text("KINDA")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
                 HStack(spacing: 10) {
 
                     if let size = app.sizeText {
@@ -764,9 +719,7 @@ struct StoreAppDetailView: View {
                         backButton
                         heroCard
                         downloadButton
-                        infoGrid
                         aboutSection
-                        whatsNewSection
                         additionalInfoSection
                     }
                     .padding(.horizontal, 16)
@@ -788,44 +741,11 @@ struct StoreAppDetailView: View {
 
     private var detailHeader: some View {
 
-        HStack(spacing: 12) {
-
-            HStack(spacing: 10) {
-
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(KindaTheme.gradient)
-                        .frame(width: 46, height: 46)
-
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Color.white)
-                }
-
-                VStack(alignment: .trailing, spacing: 0) {
-
-                    Text("KINDA")
-                        .font(.system(size: 20, weight: .heavy))
-
-                    Text("متجر التطبيقات")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-
-            HStack(spacing: 14) {
-
-                Image(systemName: "square.grid.2x2")
-                Image(systemName: "bell")
-                Image(systemName: "shield")
-            }
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(.primary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        Text("IQIraq")
+            .font(.system(size: 20, weight: .heavy))
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
     }
 
     private var backButton: some View {
@@ -860,19 +780,6 @@ struct StoreAppDetailView: View {
             Text(app.name)
                 .font(.system(size: 28, weight: .heavy))
                 .multilineTextAlignment(.center)
-
-            Text("KINDA")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-
-            if !app.category.isEmpty {
-
-                Text(app.category)
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(Color.secondary.opacity(0.12)))
-            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 26)
@@ -932,50 +839,6 @@ struct StoreAppDetailView: View {
         .disabled(activeDownloadID != nil)
     }
 
-    // MARK: Info Grid
-
-    private var infoGrid: some View {
-
-        LazyVGrid(
-            columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
-            spacing: 12
-        ) {
-
-            infoCard(icon: "tag", title: "الإصدار", value: app.version)
-            infoCard(icon: "externaldrive", title: "الحجم", value: app.sizeText ?? "—")
-            infoCard(icon: "shippingbox", title: "التصنيف", value: app.category)
-            infoCard(icon: "sparkles", title: "المعرّف", value: app.shortIdentifier)
-        }
-    }
-
-    private func infoCard(icon: String, title: String, value: String) -> some View {
-
-        VStack(spacing: 6) {
-
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(KindaTheme.purple)
-
-            Text(title)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            Text(value.isEmpty ? "—" : value)
-                .font(.subheadline.weight(.bold))
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(KindaTheme.cardBG)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
-        )
-    }
-
     // MARK: About
 
     private var aboutSection: some View {
@@ -1000,29 +863,6 @@ struct StoreAppDetailView: View {
         }
     }
 
-    // MARK: What's New
-
-    private var whatsNewSection: some View {
-
-        VStack(alignment: .trailing, spacing: 10) {
-
-            Text("الجديد في هذا الإصدار")
-                .font(.title3.weight(.heavy))
-
-            Text("الإصدار \(app.version) — تحسينات في الأداء وإصلاح مشاكل عامة.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.secondary.opacity(0.08))
-                )
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-    }
-
     // MARK: Additional Info
 
     private var additionalInfoSection: some View {
@@ -1038,9 +878,9 @@ struct StoreAppDetailView: View {
                 Divider()
                 infoRow(title: "الإصدار", value: app.version, mono: true)
                 Divider()
-                infoRow(title: "المطوّر", value: "KINDA", mono: true)
-                Divider()
                 infoRow(title: "الحجم", value: app.sizeText ?? "—", mono: true)
+                Divider()
+                infoRow(title: "التصنيف", value: app.category, mono: false)
             }
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
