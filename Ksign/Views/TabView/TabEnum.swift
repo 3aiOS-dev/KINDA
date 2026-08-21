@@ -7,6 +7,7 @@ enum TabEnum: String, CaseIterable, Hashable {
     case library
     case settings
     case certificates
+    case search // تبويب البحث - منفصل عن باقي التبويبات، يظهر كأيقونة عائمة مستقلة زي الدائرة السوداء بالصورة
 
     var title: String {
         switch self {
@@ -20,6 +21,8 @@ enum TabEnum: String, CaseIterable, Hashable {
             return .localized("Settings")
         case .certificates:
             return .localized("Certificates")
+        case .search:
+            return .localized("بحث")
         }
     }
 
@@ -35,6 +38,9 @@ enum TabEnum: String, CaseIterable, Hashable {
             return "gearshape.2"
         case .certificates:
             return "person.text.rectangle"
+        case .search:
+            // نفس مكان الدائرة السوداء العائمة بالصورة، لكن بدل علامة + صارت أيقونة بحث
+            return "magnifyingglass"
         }
     }
 
@@ -57,6 +63,10 @@ enum TabEnum: String, CaseIterable, Hashable {
             NBNavigationView(.localized("Certificates")) {
                 CertificatesView()
             }
+
+        case .search:
+            // زر البحث العائم يفتح شاشة الرئيسية مباشرة مع تفعيل مربع البحث تلقائياً
+            HomeView(autoFocusSearch: true)
         }
     }
 
@@ -73,4 +83,16 @@ enum TabEnum: String, CaseIterable, Hashable {
             .certificates
         ]
     }
+
+    /// التبويبات اللي لازم تترسم منفصلة عن الشريط الرئيسي (زي الدائرة السوداء العائمة بالصورة)
+    /// بدل ما تكون جزء من نفس الكبسولة اللي فيها باقي الأيقونات على اليسار.
+    static var floatingTabs: [TabEnum] {
+        [
+            .search
+        ]
+    }
+
+    /// اسم الإشعار المستخدم لفتح شاشة الرئيسية مع تفعيل البحث مباشرة
+    /// من أي مكان بالتطبيق (نفس أسلوب "ksign.openLibraryTab" المستخدم في HomeView).
+    static let openHomeSearchNotification = Notification.Name("ksign.openHomeSearch")
 }
