@@ -1,5 +1,9 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let kindaOpenStoreApp = Notification.Name("KindaOpenStoreApp")
+}
+
 struct VariedTabbarView: View {
     @State private var selectedTab: TabEnum = .home
     @State private var isSearchPresented = false
@@ -13,35 +17,35 @@ struct VariedTabbarView: View {
             bottomBar
         }
         .sheet(isPresented: $isSearchPresented) {
-            AppSearchView()
+            AppSearchView { app in
+                isSearchPresented = false
+
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTab = .home
+                }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    NotificationCenter.default.post(
+                        name: .kindaOpenStoreApp,
+                        object: nil,
+                        userInfo: ["appID": app.id]
+                    )
+                }
+            }
         }
     }
 
-    // MARK: - الشريط السفلي
-
     private var bottomBar: some View {
-        ZStack(alignment: .trailing) {
-
-            // الكبسولة التي تحتوي:
-            // الرئيسية + المكتبة + الإعدادات
+        HStack(spacing: 12) {
             HStack(spacing: 0) {
-                ForEach(
-                    TabEnum.defaultTabs,
-                    id: \.self
-                ) { tab in
+                ForEach(TabEnum.defaultTabs, id: \.self) { tab in
                     tabButton(tab)
                 }
             }
-            .environment(
-                \.layoutDirection,
-                .rightToLeft
-            )
+            .environment(\.layoutDirection, .rightToLeft)
             .padding(5)
             .frame(height: 56)
-            .background(
-                .ultraThinMaterial,
-                in: Capsule()
-            )
+            .background(.ultraThinMaterial, in: Capsule())
             .overlay {
                 Capsule()
                     .stroke(
@@ -56,8 +60,6 @@ struct VariedTabbarView: View {
             )
             .frame(maxWidth: 250)
 
-            // الدائرة السوداء المنفصلة.
-            // تم تغيير علامة + إلى البحث.
             Button {
                 isSearchPresented = true
             } label: {
@@ -69,14 +71,8 @@ struct VariedTabbarView: View {
                         )
                     )
                     .foregroundStyle(.white)
-                    .frame(
-                        width: 58,
-                        height: 58
-                    )
-                    .background(
-                        Color.black,
-                        in: Circle()
-                    )
+                    .frame(width: 58, height: 58)
+                    .background(Color.black, in: Circle())
                     .shadow(
                         color: .black.opacity(0.22),
                         radius: 12,
@@ -84,43 +80,28 @@ struct VariedTabbarView: View {
                     )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(
-                .localized("البحث")
-            )
+            .accessibilityLabel(.localized("البحث"))
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 6)
-        .background(.clear)
     }
 
-    // MARK: - زر التبويب
-
-    private func tabButton(
-        _ tab: TabEnum
-    ) -> some View {
+    private func tabButton(_ tab: TabEnum) -> some View {
         Button {
-            guard selectedTab != tab else {
-                return
-            }
+            guard selectedTab != tab else { return }
 
-            withAnimation(
-                .easeInOut(duration: 0.18)
-            ) {
+            withAnimation(.easeInOut(duration: 0.18)) {
                 selectedTab = tab
             }
         } label: {
             VStack(spacing: 3) {
-
                 Image(systemName: tab.icon)
                     .font(
                         .system(
                             size: 18,
-                            weight:
-                                selectedTab == tab
-                                ? .bold
-                                : .medium
+                            weight: selectedTab == tab ? .bold : .medium
                         )
                     )
 
@@ -128,29 +109,20 @@ struct VariedTabbarView: View {
                     .font(
                         .system(
                             size: 9,
-                            weight:
-                                selectedTab == tab
-                                ? .semibold
-                                : .medium
+                            weight: selectedTab == tab ? .semibold : .medium
                         )
                     )
                     .lineLimit(1)
             }
             .foregroundStyle(
-                selectedTab == tab
-                ? .primary
-                : .secondary
+                selectedTab == tab ? .primary : .secondary
             )
-            .frame(
-                maxWidth: .infinity
-            )
+            .frame(maxWidth: .infinity)
             .frame(height: 46)
             .background {
                 if selectedTab == tab {
                     Capsule()
-                        .fill(
-                            Color.primary.opacity(0.09)
-                        )
+                        .fill(Color.primary.opacity(0.09))
                 }
             }
         }
@@ -158,15 +130,15 @@ struct VariedTabbarView: View {
     }
 }
 
-// MARK: - شاشة البحث
+// MARK: - البحث المنفصل
 
 private struct AppSearchView: View {
     @Environment(\.dismiss) private var dismiss
 
-    @StateObject private var storeManager =
-        KindaStoreManager.shared
-
+    @StateObject private var storeManager = KindaStoreManager.shared
     @State private var searchText = ""
+
+    let onSelect: (StoreApp) -> Void
 
     private var results: [StoreApp] {
         storeManager.filtered(searchText)
@@ -178,69 +150,41 @@ private struct AppSearchView: View {
                 Color(.systemBackground)
                     .ignoresSafeArea()
 
-                if storeManager.isLoading &&
-                    storeManager.apps.isEmpty {
-
+                if storeManager.isLoading && storeManager.apps.isEmpty {
                     ProgressView()
-
                 } else if results.isEmpty {
-
                     VStack(spacing: 10) {
-                        Image(
-                            systemName:
-                                "magnifyingglass"
-                        )
-                        .font(
-                            .system(
-                                size: 24,
-                                weight: .medium
-                            )
-                        )
-                        .foregroundStyle(.secondary)
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundStyle(.secondary)
 
                         Text(
                             searchText.isEmpty
                             ? "لا توجد تطبيقات"
                             : "لا توجد نتائج"
                         )
-                        .font(
-                            .system(
-                                size: 16,
-                                weight: .semibold
-                            )
-                        )
+                        .font(.system(size: 16, weight: .semibold))
 
                         Text(
                             searchText.isEmpty
                             ? "ستظهر هنا التطبيقات الموجودة في الرئيسية."
                             : "جرّب البحث باسم التطبيق أو Bundle ID."
                         )
-                        .font(
-                            .system(size: 12)
-                        )
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(
-                            .center
-                        )
+                        .multilineTextAlignment(.center)
                     }
                     .padding(30)
-
                 } else {
-
                     ScrollView {
                         LazyVStack(spacing: 10) {
-
                             ForEach(results) { app in
-
                                 Button {
-                                    dismiss()
+                                    onSelect(app)
                                 } label: {
-
                                     HStack(spacing: 12) {
-
                                         StoreIconView(
-                                            urlString:
-                                                app.iconURL,
+                                            urlString: app.iconURL,
                                             size: 46
                                         )
 
@@ -248,7 +192,6 @@ private struct AppSearchView: View {
                                             alignment: .trailing,
                                             spacing: 3
                                         ) {
-
                                             Text(app.name)
                                                 .font(
                                                     .system(
@@ -256,9 +199,7 @@ private struct AppSearchView: View {
                                                         weight: .semibold
                                                     )
                                                 )
-                                                .foregroundStyle(
-                                                    .primary
-                                                )
+                                                .foregroundStyle(.primary)
                                                 .frame(
                                                     maxWidth: .infinity,
                                                     alignment: .trailing
@@ -271,9 +212,7 @@ private struct AppSearchView: View {
                                                         design: .monospaced
                                                     )
                                                 )
-                                                .foregroundStyle(
-                                                    .secondary
-                                                )
+                                                .foregroundStyle(.secondary)
                                                 .frame(
                                                     maxWidth: .infinity,
                                                     alignment: .trailing
@@ -282,14 +221,11 @@ private struct AppSearchView: View {
                                     }
                                     .padding(12)
                                     .background(
-                                        Color(
-                                            .secondarySystemGroupedBackground
-                                        ),
-                                        in:
-                                            RoundedRectangle(
-                                                cornerRadius: 16,
-                                                style: .continuous
-                                            )
+                                        Color(.secondarySystemGroupedBackground),
+                                        in: RoundedRectangle(
+                                            cornerRadius: 16,
+                                            style: .continuous
+                                        )
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -302,37 +238,22 @@ private struct AppSearchView: View {
                     }
                 }
             }
-            .navigationTitle(
-                .localized("البحث")
-            )
-            .navigationBarTitleDisplayMode(
-                .inline
-            )
+            .navigationTitle(.localized("البحث"))
+            .navigationBarTitleDisplayMode(.inline)
             .searchable(
                 text: $searchText,
-                placement:
-                    .navigationBarDrawer(
-                        displayMode: .always
-                    ),
-                prompt:
-                    .localized("ابحث عن تطبيق")
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: .localized("ابحث عن تطبيق")
             )
             .toolbar {
-                ToolbarItem(
-                    placement: .topBarLeading
-                ) {
-                    Button(
-                        .localized("إغلاق")
-                    ) {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(.localized("إغلاق")) {
                         dismiss()
                     }
                 }
             }
         }
-        .environment(
-            \.layoutDirection,
-            .rightToLeft
-        )
+        .environment(\.layoutDirection, .rightToLeft)
         .task {
             if storeManager.apps.isEmpty {
                 await storeManager.load()
