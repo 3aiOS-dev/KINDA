@@ -21,7 +21,7 @@
 		33CF13392DB5ACFB0021D4C5 /* SWCompression in Frameworks */ = {isa = PBXBuildFile; productRef = 33CF13382DB5ACFB0021D4C5 /* SWCompression */; };
 		C42CC1AD2F4370F20064A4A2 /* IDevice in Frameworks */ = {isa = PBXBuildFile; productRef = C42CC1AC2F4370F20064A4A2 /* IDevice */; };
 		C42CC1AF2F4370F20064A4A2 /* IDeviceSwift in Frameworks */ = {isa = PBXBuildFile; productRef = C42CC1AE2F4370F20064A4A2 /* IDeviceSwift */; };
-		C451296C2E54F0DC00E94CC7 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = C451296B2E54F0DB00E94CC7 /* ZIPFoundation */; };
+		C451296C2E54F0DC00E94CC7 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = C451296B2E54E8E900E94CC7 /* ZIPFoundation */; };
 		C4CEAE0C2DDF4735007EF880 /* ArArchiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = C4CEAE0B2DDF4735007EF880 /* ArArchiveKit */; };
 /* End PBXBuildFile section */
 
@@ -54,7 +54,7 @@
 
 /* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
 		33CF134C2DB5B9BC0021D4C5 /* Exceptions for "Ksign" folder in "Copy Bundle Resources" phase from "Ksign" target */ = {
-			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			isa = PBXFileSystemSynchronizedGroupBuildFileExceptionSet;
 			buildPhase = 3379C1B72DA869A1004372DA /* Resources */;
 			membershipExceptions = (
 				Resources/ellekit.deb,
@@ -85,7 +85,7 @@
 				330F68FC2DBF7C8600D8C35D /* NimbleExtensions in Frameworks */,
 				C42CC1AD2F4370F20064A4A2 /* IDevice in Frameworks */,
 				3346F5C22DC329A200C7D508 /* ZsignSwift in Frameworks */,
-				3346F8492DC6D64800C7D508 /* NimbleJSON in Frameworks */,
+				3346F8492DC8BF5B00730215 /* NimbleJSON in Frameworks */,
 				330F69012DC03DF500D8C35D /* NimbleExtensions in Frameworks */,
 				33CF13392DB5ACFB0021D4C5 /* SWCompression in Frameworks */,
 				33693A082DC8BF5B00730215 /* AltSourceKit in Frameworks */,
@@ -161,14 +161,14 @@
 				3305BBAB2DB8944200660D45 /* Vapor */,
 				330F68FB2DBF7C8600D8C35D /* NimbleExtensions */,
 				330F68FD2DBF7C8600D8C35D /* NimbleViews */,
-				330F69002DC03DF500D8C35D /* NimbleExtensions */,
-				330F69022DC03DF500D8C35D /* NimbleViews */,
+				330F69002DBF7C8600D8C35D /* NimbleExtensions */,
+				330F69022DBF7C8600D8C35D /* NimbleViews */,
 				3346F5C12DC329A200C7D508 /* ZsignSwift */,
 				3346F83A2DC6C6D100C7D508 /* NukeUI */,
 				3346F8482DC6D64800C7D508 /* NimbleJSON */,
 				33693A072DC8BF5B00730215 /* AltSourceKit */,
-				C4CEAE0B2DDF4735007EF880 /* ArArchiveKit */,
-				C451296B2E54F0DB00E94CC7 /* ZIPFoundation */,
+				C4CEAE0B2DDF416B007EF880 /* ArArchiveKit */,
+				C451296B2E54E8E900E94CC7 /* ZIPFoundation */,
 				C42CC1AC2F4370F20064A4A2 /* IDevice */,
 				C42CC1AE2F4370F20064A4A2 /* IDeviceSwift */,
 			);
@@ -235,13 +235,13 @@
 				3371F6F52DA9EBA500281AC6 /* XCRemoteSwiftPackageReference "Zip" */,
 				33CF13372DB5ACFB0021D4C5 /* XCRemoteSwiftPackageReference "SWCompression" */,
 				3305BBAA2DB8944200660D45 /* XCRemoteSwiftPackageReference "vapor" */,
-				330F68FF2DC03DF400D8C35D /* XCLocalSwiftPackageReference "NimbleKit" */,
+				330F68FF2DC9D05C00642FFB /* XCLocalSwiftPackageReference "NimbleKit" */,
 				3346F8372DC6C68300C7D508 /* XCRemoteSwiftPackageReference "Nuke" */,
 				33693A062DC8BF5B00730215 /* XCLocalSwiftPackageReference "AltSourceKit" */,
 				339776052DC9D05C00642FFB /* XCRemoteSwiftPackageReference "LicensePlist" */,
 				C4CEAE0A2DDF416B007EF880 /* XCRemoteSwiftPackageReference "ArArchiveKit" */,
 				C40422132E119AF900D1F324 /* XCLocalSwiftPackageReference "Zsign" */,
-				C45128062E54E8E900E94CC7 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+				C45128062E54E8E900E94CC7 /* XCLocalSwiftPackageReference "ZIPFoundation" */,
 				C42CC1AB2F4370F20064A4A2 /* XCLocalSwiftPackageReference "IDeviceKit" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -414,7 +414,6 @@
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
@@ -468,7 +467,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Ksign/Resources/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Ksign;
+				INFOPLIST_KEY_CFBundleDisplayName = iQiraq;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright (c) 2025 Nagata Asami";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -478,6 +477,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen.storyboard";
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -489,7 +489,7 @@
 					"$(PROJECT_DIR)/Ksign/Resources/idevice",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 1.6.1;
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = nya.asami.ksign;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -534,7 +534,7 @@
 				GCC_PREPROCESSOR_DEFINITIONS = "SERVER=1";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Ksign/Resources/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Ksign;
+				INFOPLIST_KEY_CFBundleDisplayName = iQiraq;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright (c) 2025 Nagata Asami";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -555,7 +555,7 @@
 					"$(PROJECT_DIR)/Ksign/Resources/idevice",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 1.6.1;
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = nya.asami.ksign;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -633,7 +633,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3379C1CD2DA869A3004372DA /* Build configuration list for PBXNativeTarget "Ksign" */ = {
+		3379C1CD2DA869A1004372DA /* Build configuration list for PBXNativeTarget "Ksign" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3379C1CE2DA869A3004372DA /* Debug */,
@@ -654,7 +654,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		330F68FF2DC03DF400D8C35D /* XCLocalSwiftPackageReference "NimbleKit" */ = {
+		330F68FF2DC6C6D400D8C35D /* XCLocalSwiftPackageReference "NimbleKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = NimbleKit;
 		};
@@ -722,7 +722,7 @@
 			};
 		};
 		C4CEAE0A2DDF416B007EF880 /* XCRemoteSwiftPackageReference "ArArchiveKit" */ = {
-			isa = XCRemoteSwiftPackageReference;
+			isa = XCSwiftPackageReference;
 			repositoryURL = "https://github.com/LebJe/ArArchiveKit";
 			requirement = {
 				kind = upToNextMajorVersion;
@@ -745,11 +745,11 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = NimbleViews;
 		};
-		330F69002DC03DF500D8C35D /* NimbleExtensions */ = {
+		330F69002DBF7C8600D8C35D /* NimbleExtensions */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = NimbleExtensions;
 		};
-		330F69022DC03DF500D8C35D /* NimbleViews */ = {
+		330F69022DBF7C8600D8C35D /* NimbleViews */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = NimbleViews;
 		};
@@ -798,7 +798,7 @@
 			package = C45128062E54E8E900E94CC7 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
 			productName = ZIPFoundation;
 		};
-		C4CEAE0B2DDF4735007EF880 /* ArArchiveKit */ = {
+		C4CEAE0B2DDF416B007EF880 /* ArArchiveKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = C4CEAE0A2DDF416B007EF880 /* XCRemoteSwiftPackageReference "ArArchiveKit" */;
 			productName = ArArchiveKit;
