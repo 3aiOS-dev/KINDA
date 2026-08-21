@@ -36,15 +36,12 @@ struct SettingsView: View {
         return _certificates[_storedSelectedCert]
     }
 
-    // رابط مستودع GitHub
-    private let _githubUrl = "https://github.com/nyasami/ksign"
-
     // MARK: - المحتوى
     var body: some View {
         NBNavigationView(.localized("Settings")) {
             Form {
 
-                // MARK: معلومات التطبيق والتواصل
+                // MARK: معلومات التطبيق
                 _feedback()
 
                 // MARK: الشهادات
@@ -154,7 +151,7 @@ struct SettingsView: View {
 // MARK: - وظائف الإعدادات
 extension SettingsView {
 
-    // MARK: معلومات التطبيق والتواصل
+    // MARK: معلومات التطبيق
     @ViewBuilder
     private func _feedback() -> some View {
         Section {
@@ -167,14 +164,6 @@ extension SettingsView {
                     .localized("About"),
                     systemImage: "info.circle"
                 )
-            }
-
-            // مستودع GitHub
-            Button(
-                .localized("GitHub Repository"),
-                systemImage: "safari"
-            ) {
-                UIApplication.open(_githubUrl)
             }
         }
     }
