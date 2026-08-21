@@ -46,15 +46,10 @@ struct KindaGridBackground: View {
 }
 
 struct HomeView: View {
-    // لما تكون true (جاية من زر البحث العائم المنفصل)، بتفتح الشاشة ومربع البحث مفعّل تلقائياً
-    var autoFocusSearch: Bool = false
-
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var storeManager = KindaStoreManager.shared
 
-    @State private var searchText = ""
     @State private var selectedAppID: String?
-    @FocusState private var searchFieldFocused: Bool
 
     @State private var activeDownloads: [String: String] = [:]
     @State private var downloadWatchTasks: [String: Task<Void, Never>] = [:]
@@ -70,7 +65,7 @@ struct HomeView: View {
     private var importedApps: FetchedResults<Imported>
 
     private var visibleApps: [StoreApp] {
-        storeManager.filtered(searchText)
+        storeManager.apps
     }
 
     var body: some View {
@@ -102,21 +97,14 @@ struct HomeView: View {
                                 .padding(.top, 6)
                             }
                         } header: {
-                            VStack(spacing: 0) {
-                                titleHeader
-
-                                searchBar
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                            }
-                            .background(KindaTheme.pageBG)
-                            .zIndex(2)
+                            titleHeader
+                                .background(KindaTheme.pageBG)
+                                .zIndex(2)
                         }
                     }
                     .padding(.bottom, 40)
                 }
                 .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.immediately)
                 .environment(\.layoutDirection, .rightToLeft)
                 .refreshable {
                     await storeManager.load()
@@ -130,14 +118,14 @@ struct HomeView: View {
             if storeManager.apps.isEmpty {
                 await storeManager.load()
             }
-
-            if autoFocusSearch {
-                await activateSearchFocus()
-            }
         }
-        .onReceive(NotificationCenter.default.publisher(for: TabEnum.openHomeSearchNotification)) { _ in
-            Task {
-                await activateSearchFocus()
+        .onReceive(NotificationCenter.default.publisher(for: .kindaOpenStoreApp)) { notification in
+            guard let appID = notification.userInfo?["appID"] as? String else {
+                return
+            }
+
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                selectedAppID = appID
             }
         }
         .onDisappear {
@@ -145,16 +133,6 @@ struct HomeView: View {
                 task.cancel()
             }
             downloadWatchTasks.removeAll()
-        }
-    }
-
-    // تأخير بسيط قبل تفعيل الفوكس لأن SwiftUI ما يقبل تفعيل @FocusState
-    // بشكل موثوق في نفس اللحظة اللي تظهر فيها الشاشة داخل TabView.
-    @MainActor
-    private func activateSearchFocus() async {
-        try? await Task.sleep(nanoseconds: 250_000_000)
-        withAnimation(.snappy) {
-            searchFieldFocused = true
         }
     }
 
@@ -169,78 +147,17 @@ struct HomeView: View {
             .multilineTextAlignment(.center)
     }
 
-    private var searchBar: some View {
-        HStack(spacing: 8) {
-            TextField("", text: $searchText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.done)
-                .focused($searchFieldFocused)
-                .onSubmit {
-                    searchFieldFocused = false
-                }
-                .overlay(alignment: .trailing) {
-                    if searchText.isEmpty {
-                        Text("ألعاب وتطبيقات والمزيد")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.secondary.opacity(0.65))
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                            .allowsHitTesting(false)
-                    }
-                }
-
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-            } else {
-                Button {
-                    searchFieldFocused = true
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .environment(\.layoutDirection, .rightToLeft)
-        .padding(.horizontal, 12)
-        .frame(height: 42)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 0.7)
-        }
-    }
-
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "square.grid.2x2")
                 .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            Text(searchText.isEmpty ? "لا توجد تطبيقات بعد" : "لا توجد نتائج")
+            Text("لا توجد تطبيقات بعد")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(.primary)
 
-            Text(
-                searchText.isEmpty
-                    ? "أضف تطبيقاً من لوحة التحكم ليظهر هنا مباشرة."
-                    : "جرّب البحث باسم التطبيق أو Bundle ID."
-            )
+            Text("أضف تطبيقاً من لوحة التحكم ليظهر هنا مباشرة.")
             .font(.system(size: 11, weight: .regular, design: .monospaced))
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
