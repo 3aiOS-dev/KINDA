@@ -1,16 +1,8 @@
-//
-//  HomeView.swift
-//  Ksign
-//
-//  الرئيسية — تصميم متجر التطبيقات مع الحفاظ على وظائف المتجر الأصلية
-//  والتنزيل الفعلي والاستيراد إلى المكتبة والتكرار.
-//
-
 import SwiftUI
 import CoreData
 import NimbleViews
+import AudioToolbox
 
-// MARK: - Theme
 
 enum KindaTheme {
     static let purple = Color(red: 0.35, green: 0.20, blue: 0.95)
@@ -70,6 +62,7 @@ struct HomeView: View {
     // تنزيلات المتجر التي تنتظر اكتمال الاستيراد إلى المكتبة.
     @State private var activeDownloads: [String: String] = [:]
     @State private var downloadWatchTasks: [String: Task<Void, Never>] = [:]
+    @State private var downloadProgress: [String: Double] = [:]
 
     // MARK: Core Data
     @FetchRequest(
@@ -103,23 +96,17 @@ struct HomeView: View {
                                     .padding(.horizontal, 16)
                                     .padding(.top, 24)
                             } else {
-                                VStack(spacing: 0) {
-                                    ForEach(Array(visibleApps.enumerated()), id: \.element.id) { index, app in
+                                VStack(spacing: 10) {
+                                    ForEach(visibleApps) { app in
                                         if selectedAppID == app.id {
                                             expandedItem(app)
-                                                .padding(.horizontal, 16)
-                                                .padding(.vertical, 14)
                                         } else {
                                             rowView(app)
-                                                .padding(.horizontal, 16)
-
-                                            if index < visibleApps.count - 1 {
-                                                Divider()
-                                                    .padding(.leading, 16 + 42 + 12)
-                                            }
                                         }
                                     }
                                 }
+                                .padding(.horizontal, 16)
+                                .padding(.top, 6)
                             }
                         } header: {
                             VStack(spacing: 0) {
@@ -162,13 +149,13 @@ struct HomeView: View {
     // MARK: Title
     private var titleHeader: some View {
         Text("الرئيسية")
-            .font(.system(size: 32, weight: .bold))
+            .font(.system(size: 19, weight: .semibold))
             .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .center)
             .padding(.horizontal, 20)
-            .padding(.top, 24)
-            .padding(.bottom, 16)
-            .environment(\.layoutDirection, .rightToLeft)
+            .padding(.top, 18)
+            .padding(.bottom, 12)
+            .multilineTextAlignment(.center)
     }
 
     // MARK: Search
@@ -263,8 +250,8 @@ struct HomeView: View {
     }
 
     // MARK: Collapsed Row
-    /// صف مسطّح تماماً بدون أي بطاقة أو خلفية خلفه — تماماً كخلايا القائمة
-    /// في تطبيق الإعدادات (Settings) الظاهرة في الصور المرجعية.
+    /// صف مطابق تماماً لتصميم بطاقة "Cinemana" المرجعية: أيقونة + اسم فقط +
+    /// زر تثبيت، وخلفه بطاقة خفيفة بسيطة بدون أي تفاصيل إضافية.
     private func rowView(_ app: StoreApp) -> some View {
         HStack(spacing: 12) {
             Button {
@@ -273,34 +260,13 @@ struct HomeView: View {
                 }
             } label: {
                 HStack(spacing: 12) {
-                    StoreIconView(urlString: app.iconURL, size: 42)
+                    StoreIconView(urlString: app.iconURL, size: 44)
 
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(app.name)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-
-                        HStack(spacing: 4) {
-                            if !app.category.isEmpty {
-                                Text(app.category)
-                            }
-
-                            if !app.category.isEmpty && !app.version.isEmpty {
-                                Text("•")
-                            }
-
-                            if !app.version.isEmpty {
-                                Text(app.version)
-                            }
-                        }
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(.secondary)
+                    Text(app.name)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .contentShape(Rectangle())
             }
@@ -308,28 +274,43 @@ struct HomeView: View {
 
             getButton(app)
         }
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
-        // بدون background وبدون overlay — لا توجد أي بطاقة خلف الصف.
+        .background(
+            Color(.secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
     }
 
     // MARK: Primary Get / Install Button
     private func getButton(_ app: StoreApp) -> some View {
         let loading = isDownloading(app)
+        let progress = downloadProgress[app.id] ?? 0
 
         return Button {
             install(app)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 if loading {
-                    ProgressView()
-                        .controlSize(.mini)
-                        .tint(.secondary)
+                    ZStack {
+                        Circle()
+                            .stroke(Color.secondary.opacity(0.25), lineWidth: 2)
+                            .frame(width: 14, height: 14)
+
+                        Circle()
+                            .trim(from: 0, to: max(0.03, progress))
+                            .stroke(Color.primary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                            .frame(width: 14, height: 14)
+                            .rotationEffect(.degrees(-90))
+                            .animation(.linear(duration: 0.2), value: progress)
+                    }
                 }
 
-                Text(loading ? "جاري التنزيل" : "تثبيت")
+                Text(loading ? "\(Int(progress * 100))%" : "تثبيت")
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
+                    .monospacedDigit()
             }
             .foregroundStyle(.primary)
             .padding(.horizontal, 12)
@@ -347,7 +328,7 @@ struct HomeView: View {
     // MARK: Expanded Item
     private func expandedItem(_ app: StoreApp) -> some View {
         VStack(spacing: 10) {
-            ZStack(alignment: .topTrailing) {
+            ZStack(alignment: .topLeading) {
                 expandedCard(app)
 
                 Button {
@@ -364,7 +345,7 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 12)
-                .padding(.trailing, 12)
+                .padding(.leading, 12)
             }
 
             statsRow(app)
@@ -395,41 +376,14 @@ struct HomeView: View {
                 .opacity(0.20)
 
             VStack(spacing: 16) {
-                StoreIconView(urlString: app.iconURL, size: 132)
+                StoreIconView(urlString: app.iconURL, size: 108)
                     .shadow(color: .black.opacity(0.35), radius: 16, y: 10)
 
                 Text(app.name)
-                    .font(.system(size: 25, weight: .heavy))
+                    .font(.system(size: 22, weight: .heavy))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
-
-                if !app.appDescription.isEmpty {
-                    Text(app.appDescription)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.86))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                }
-
-                if !app.category.isEmpty || !app.bundleId.isEmpty {
-                    HStack(spacing: 8) {
-                        if !app.category.isEmpty {
-                            Text(app.category)
-                        }
-
-                        if !app.category.isEmpty && !app.bundleId.isEmpty {
-                            Text("•")
-                        }
-
-                        if !app.bundleId.isEmpty {
-                            Text(app.bundleId)
-                                .lineLimit(1)
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.72))
-                }
 
                 HStack(spacing: 12) {
                     pillButton(
@@ -448,11 +402,11 @@ struct HomeView: View {
                 }
             }
             .environment(\.layoutDirection, .rightToLeft)
-            .padding(.vertical, 44)
+            .padding(.vertical, 34)
             .padding(.horizontal, 24)
         }
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 380)
+        .frame(minHeight: 260)
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 32, style: .continuous)
@@ -520,7 +474,13 @@ struct HomeView: View {
     }
 
     private func install(_ app: StoreApp) {
+        playInstallSound()
         startStoreDownload(for: app)
+    }
+
+    /// نغمة نظام قصيرة عند الضغط على "تثبيت"، تماماً كسلوك المتجر الرسمي.
+    private func playInstallSound() {
+        AudioServicesPlaySystemSound(1104)
     }
 
     /// إعادة التنزيل من رابط IPA الحقيقي الموجود في المتجر.
@@ -608,12 +568,15 @@ extension HomeView {
                 }
 
                 if let currentDownload = DownloadManager.shared.getDownload(by: downloadID) {
+                    downloadProgress[app.id] = currentDownload.progress
+
                     if currentDownload.totalBytes > 0,
                        currentDownload.progress >= 0.999 {
                         reachedDownloadCompletion = true
                     }
                 } else if reachedDownloadCompletion {
                     // اكتمل التنزيل لكن الاستيراد قد يحتاج وقتاً إضافياً.
+                    downloadProgress[app.id] = 1.0
                 }
 
                 if DispatchTime.now().uptimeNanoseconds >= deadline {
@@ -703,6 +666,7 @@ extension HomeView {
     ) {
         activeDownloads[app.id] = nil
         downloadWatchTasks[downloadID] = nil
+        downloadProgress[app.id] = nil
 
         guard success, imported != nil else {
             UIAlertController.showAlertWithOk(
