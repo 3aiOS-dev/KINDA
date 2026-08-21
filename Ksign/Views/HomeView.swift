@@ -46,6 +46,9 @@ struct KindaGridBackground: View {
 }
 
 struct HomeView: View {
+    // لما تكون true (جاية من زر البحث العائم المنفصل)، بتفتح الشاشة ومربع البحث مفعّل تلقائياً
+    var autoFocusSearch: Bool = false
+
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var storeManager = KindaStoreManager.shared
 
@@ -127,12 +130,31 @@ struct HomeView: View {
             if storeManager.apps.isEmpty {
                 await storeManager.load()
             }
+
+            if autoFocusSearch {
+                await activateSearchFocus()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: TabEnum.openHomeSearchNotification)) { _ in
+            Task {
+                await activateSearchFocus()
+            }
         }
         .onDisappear {
             for task in downloadWatchTasks.values {
                 task.cancel()
             }
             downloadWatchTasks.removeAll()
+        }
+    }
+
+    // تأخير بسيط قبل تفعيل الفوكس لأن SwiftUI ما يقبل تفعيل @FocusState
+    // بشكل موثوق في نفس اللحظة اللي تظهر فيها الشاشة داخل TabView.
+    @MainActor
+    private func activateSearchFocus() async {
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        withAnimation(.snappy) {
+            searchFieldFocused = true
         }
     }
 
