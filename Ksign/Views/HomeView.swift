@@ -3,7 +3,6 @@ import CoreData
 import NimbleViews
 import AudioToolbox
 
-
 enum KindaTheme {
     static let purple = Color(red: 0.35, green: 0.20, blue: 0.95)
     static let purpleLight = Color(red: 0.58, green: 0.42, blue: 0.98)
@@ -13,7 +12,6 @@ enum KindaTheme {
     static var chipBG: Color { Color.secondary.opacity(0.12) }
 }
 
-/// خلفية شبكية خفيفة مشابهة لتصميم المتجر في الصورة.
 struct KindaGridBackground: View {
     private let spacing: CGFloat = 48
     private let lineOpacity: Double = 0.045
@@ -47,24 +45,18 @@ struct KindaGridBackground: View {
     }
 }
 
-// MARK: - Home View
-
 struct HomeView: View {
-    // MARK: Managers
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var storeManager = KindaStoreManager.shared
 
-    // MARK: State
     @State private var searchText = ""
     @State private var selectedAppID: String?
     @FocusState private var searchFieldFocused: Bool
 
-    // تنزيلات المتجر التي تنتظر اكتمال الاستيراد إلى المكتبة.
     @State private var activeDownloads: [String: String] = [:]
     @State private var downloadWatchTasks: [String: Task<Void, Never>] = [:]
     @State private var downloadProgress: [String: Double] = [:]
 
-    // MARK: Core Data
     @FetchRequest(
         entity: Imported.entity(),
         sortDescriptors: [
@@ -74,12 +66,10 @@ struct HomeView: View {
     )
     private var importedApps: FetchedResults<Imported>
 
-    // MARK: Derived
     private var visibleApps: [StoreApp] {
         storeManager.filtered(searchText)
     }
 
-    // MARK: Body
     var body: some View {
         NavigationStack {
             ZStack {
@@ -146,7 +136,6 @@ struct HomeView: View {
         }
     }
 
-    // MARK: Title
     private var titleHeader: some View {
         Text("الرئيسية")
             .font(.system(size: 19, weight: .semibold))
@@ -158,10 +147,8 @@ struct HomeView: View {
             .multilineTextAlignment(.center)
     }
 
-    // MARK: Search
     private var searchBar: some View {
         HStack(spacing: 8) {
-            // نحافظ على ترتيب التصميم بصرياً داخل RTL.
             TextField("", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15, weight: .bold))
@@ -217,7 +204,6 @@ struct HomeView: View {
         }
     }
 
-    // MARK: Empty State
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "square.grid.2x2")
@@ -249,9 +235,6 @@ struct HomeView: View {
         .padding(.top, 24)
     }
 
-    // MARK: Collapsed Row
-    /// صف مطابق تماماً لتصميم بطاقة "Cinemana" المرجعية: أيقونة + اسم فقط +
-    /// زر تثبيت، وخلفه بطاقة خفيفة بسيطة بدون أي تفاصيل إضافية.
     private func rowView(_ app: StoreApp) -> some View {
         HStack(spacing: 12) {
             Button {
@@ -266,6 +249,7 @@ struct HomeView: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .multilineTextAlignment(.trailing)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .contentShape(Rectangle())
@@ -283,7 +267,6 @@ struct HomeView: View {
         )
     }
 
-    // MARK: Primary Get / Install Button
     private func getButton(_ app: StoreApp) -> some View {
         let loading = isDownloading(app)
         let progress = downloadProgress[app.id] ?? 0
@@ -325,7 +308,6 @@ struct HomeView: View {
         .disabled(loading)
     }
 
-    // MARK: Expanded Item
     private func expandedItem(_ app: StoreApp) -> some View {
         VStack(spacing: 10) {
             ZStack(alignment: .topLeading) {
@@ -352,7 +334,6 @@ struct HomeView: View {
         }
     }
 
-    // MARK: Expanded Card
     private func expandedCard(_ app: StoreApp) -> some View {
         ZStack {
             GeometryReader { proxy in
@@ -370,7 +351,6 @@ struct HomeView: View {
                 .clipped()
             }
 
-            // طبقة زجاجية خفيفة فوق الخلفية الضبابية.
             Rectangle()
                 .fill(.ultraThinMaterial)
                 .opacity(0.20)
@@ -438,7 +418,6 @@ struct HomeView: View {
         .disabled(isLoading)
     }
 
-    // MARK: Stats
     private func statsRow(_ app: StoreApp) -> some View {
         HStack(spacing: 8) {
             statBox(title: "حجم التطبيق", value: app.sizeValueText)
@@ -468,7 +447,6 @@ struct HomeView: View {
         }
     }
 
-    // MARK: Downloads
     private func isDownloading(_ app: StoreApp) -> Bool {
         activeDownloads[app.id] != nil
     }
@@ -478,13 +456,10 @@ struct HomeView: View {
         startStoreDownload(for: app)
     }
 
-    /// نغمة نظام قصيرة عند الضغط على "تثبيت"، تماماً كسلوك المتجر الرسمي.
     private func playInstallSound() {
         AudioServicesPlaySystemSound(1104)
     }
 
-    /// إعادة التنزيل من رابط IPA الحقيقي الموجود في المتجر.
-    /// هذه هي وظيفة زر «تكرار»: تبدأ عملية تنزيل واستيراد جديدة فعلياً.
     private func repeatDownload(_ app: StoreApp) {
         startStoreDownload(for: app)
     }
@@ -504,7 +479,6 @@ struct HomeView: View {
             return
         }
 
-        // نلتقط السجلات الموجودة قبل بدء المحاولة حتى لا تعتبر نسخة قديمة نجاحاً.
         let existingImportedUUIDs = Set(
             importedApps.compactMap { $0.uuid }
         )
@@ -528,12 +502,7 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Store Download Handling
-
 extension HomeView {
-    /// ينتظر اكتمال تنزيل IPA ثم اكتمال استيراده فعلياً إلى Core Data.
-    /// اختفاء Download من DownloadManager لا يعني فشلاً، لأن المدير قد يحذف
-    /// عنصر التنزيل بعد تسليم الملف إلى معالجة الاستيراد.
     private func watchStoreDownload(
         _ download: Download,
         app: StoreApp,
@@ -552,7 +521,6 @@ extension HomeView {
             var reachedDownloadCompletion = false
 
             while !Task.isCancelled {
-                // النجاح الحقيقي هو ظهور Imported جديد ناتج عن المحاولة الحالية.
                 if let imported = findNewImportedApp(
                     for: app,
                     existingUUIDs: existingImportedUUIDs,
@@ -575,7 +543,6 @@ extension HomeView {
                         reachedDownloadCompletion = true
                     }
                 } else if reachedDownloadCompletion {
-                    // اكتمل التنزيل لكن الاستيراد قد يحتاج وقتاً إضافياً.
                     downloadProgress[app.id] = 1.0
                 }
 
@@ -613,7 +580,6 @@ extension HomeView {
         downloadWatchTasks[downloadID] = task
     }
 
-    /// يبحث عن سجل Imported جديد ناتج عن محاولة التنزيل الحالية.
     private func findNewImportedApp(
         for app: StoreApp,
         existingUUIDs: Set<String>,
@@ -632,14 +598,12 @@ extension HomeView {
                 return false
             }
 
-            // Bundle ID هو المطابقة الأقوى.
             if let identifier = imported.identifier,
                !app.bundleId.isEmpty,
                identifier.caseInsensitiveCompare(app.bundleId) == .orderedSame {
                 return true
             }
 
-            // ثم الاسم + الإصدار.
             if let name = imported.name,
                let version = imported.version,
                !app.version.isEmpty,
@@ -648,7 +612,6 @@ extension HomeView {
                 return true
             }
 
-            // وأخيراً الاسم كحل احتياطي.
             if let name = imported.name {
                 return name.localizedCaseInsensitiveCompare(app.name) == .orderedSame
             }
@@ -657,7 +620,6 @@ extension HomeView {
         }
     }
 
-    /// ينظف حالة التنزيل ولا يفتح المكتبة إلا بعد نجاح الاستيراد الحقيقي.
     private func finishStoreDownload(
         app: StoreApp,
         downloadID: String,
@@ -678,7 +640,6 @@ extension HomeView {
             return
         }
 
-        // أصبح التطبيق Imported فعلياً؛ افتح المكتبة بعد نجاح الاستيراد فقط.
         DispatchQueue.main.async {
             NotificationCenter.default.post(
                 name: NSNotification.Name("ksign.openLibraryTab"),
@@ -687,8 +648,6 @@ extension HomeView {
         }
     }
 }
-
-// MARK: - Store Model (Lovable Cloud)
 
 struct StoreApp: Identifiable, Decodable, Hashable {
     let id: String
@@ -713,7 +672,6 @@ struct StoreApp: Identifiable, Decodable, Hashable {
         case sizeMB = "size_mb"
     }
 
-    /// نص الحجم جاهز للعرض (MB أو GB).
     var sizeText: String? {
         guard let sizeMB, sizeMB > 0 else { return nil }
 
@@ -724,25 +682,20 @@ struct StoreApp: Identifiable, Decodable, Hashable {
         return String(format: "%.0f MB", sizeMB)
     }
 
-    /// رقم الحجم فقط بمنزلة عشرية واحدة لبطاقة الإحصائيات.
     var sizeValueText: String {
         guard let sizeMB, sizeMB > 0 else { return "—" }
         return String(format: "%.1f", sizeMB)
     }
 
-    /// معرّف مختصر.
     var shortIdentifier: String {
         bundleId.split(separator: ".").last.map(String.init) ?? bundleId
     }
 }
 
-// MARK: - Store Manager
-
 @MainActor
 final class KindaStoreManager: ObservableObject {
     static let shared = KindaStoreManager()
 
-    // بيانات الاتصال بلوحة التحكم (Lovable Cloud).
     private let baseURL = "https://ibskoyypugseeixzntyt.supabase.co"
     private let apiKey = "sb_publishable_McRq3FTx_r7pL2PbGk8YBA_mMnJmtFm"
 
@@ -796,8 +749,6 @@ final class KindaStoreManager: ObservableObject {
         }
     }
 }
-
-// MARK: - Store Icon
 
 struct StoreIconView: View {
     let urlString: String
