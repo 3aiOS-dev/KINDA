@@ -2,7 +2,8 @@ import SwiftUI
 import NimbleViews
 
 enum TabEnum: String, CaseIterable, Hashable {
-    case home
+    case home // تم التغيير هنا من files إلى home
+    case sources
     case library
     case settings
     case certificates
@@ -10,95 +11,66 @@ enum TabEnum: String, CaseIterable, Hashable {
     var title: String {
         switch self {
         case .home:
-            return .localized("الرئيسية")
-
+            return .localized("الرئيسية") // يمكنك جعلها "Home" إذا كان التطبيق بالإنجليزية
+        case .sources:
+            return .localized("Sources")
         case .library:
-            return .localized("المكتبة")
-
+            return .localized("Library")
         case .settings:
-            return .localized("الإعدادات")
-
+            return .localized("Settings")
         case .certificates:
-            return .localized("الشهادات")
+            return .localized("Certificates")
         }
     }
 
     var icon: String {
         switch self {
         case .home:
-            return "house.fill"
-
+            return "house.fill" // تم تغيير الأيقونة لتناسب الرئيسية
+        case .sources:
+            return "globe.desk"
         case .library:
-            return "square.grid.2x2.fill"
-
+            return "square.grid.2x2"
         case .settings:
-            return "gearshape.2.fill"
-
+            return "gearshape.2"
         case .certificates:
-            return "person.text.rectangle.fill"
+            return "person.text.rectangle"
         }
     }
 
     @ViewBuilder
     static func view(for tab: TabEnum) -> some View {
         switch tab {
-
         case .home:
-            HomeView()
+            HomeView() // توجيه التبويب إلى الشاشة الجديدة
+
+        case .sources:
+            SourcesView()
 
         case .library:
             LibraryView()
 
         case .settings:
-            SettingsWithCertificatesView()
+            SettingsView()
 
         case .certificates:
-            NBNavigationView(.localized("الشهادات")) {
+            NBNavigationView(.localized("Certificates")) {
                 CertificatesView()
             }
         }
     }
 
-    // التبويبات الرئيسية فقط.
-    // لا يوجد More ولا Sources ولا Certificates هنا.
     static var defaultTabs: [TabEnum] {
         [
-            .home,
+            .home, // تم التحديث هنا
             .library,
             .settings
         ]
     }
 
-    // تعطيل التبويبات الإضافية بالكامل.
-    // هذا يمنع ظهور More أو Certificates عند تدوير الجهاز.
     static var customizableTabs: [TabEnum] {
-        []
-    }
-}
-
-// MARK: - الإعدادات مع الشهادات
-
-private struct SettingsWithCertificatesView: View {
-    @State private var showCertificates = false
-
-    var body: some View {
-        SettingsView()
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showCertificates = true
-                    } label: {
-                        Image(systemName: TabEnum.certificates.icon)
-                    }
-                    .accessibilityLabel(
-                        .localized("الشهادات")
-                    )
-                }
-            }
-            .sheet(isPresented: $showCertificates) {
-                NBNavigationView(.localized("الشهادات")) {
-                    CertificatesView()
-                }
-            }
+        [
+            .certificates
+        ]
     }
 }
