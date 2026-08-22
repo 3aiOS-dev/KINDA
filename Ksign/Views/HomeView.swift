@@ -49,7 +49,9 @@ struct HomeView: View {
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var storeManager = KindaStoreManager.shared
 
+    @State private var searchText = ""
     @State private var selectedAppID: String?
+    @FocusState private var searchFieldFocused: Bool
 
     @State private var activeDownloads: [String: String] = [:]
     @State private var downloadWatchTasks: [String: Task<Void, Never>] = [:]
@@ -65,7 +67,7 @@ struct HomeView: View {
     private var importedApps: FetchedResults<Imported>
 
     private var visibleApps: [StoreApp] {
-        storeManager.apps
+        storeManager.filtered(searchText)
     }
 
     var body: some View {
@@ -97,14 +99,21 @@ struct HomeView: View {
                                 .padding(.top, 6)
                             }
                         } header: {
-                            titleHeader
-                                .background(KindaTheme.pageBG)
-                                .zIndex(2)
+                            VStack(spacing: 0) {
+                                titleHeader
+
+                                searchBar
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                            }
+                            .background(KindaTheme.pageBG)
+                            .zIndex(2)
                         }
                     }
                     .padding(.bottom, 40)
                 }
                 .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.immediately)
                 .environment(\.layoutDirection, .rightToLeft)
                 .refreshable {
                     await storeManager.load()
@@ -119,15 +128,6 @@ struct HomeView: View {
                 await storeManager.load()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .kindaOpenStoreApp)) { notification in
-            guard let appID = notification.userInfo?["appID"] as? String else {
-                return
-            }
-
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                selectedAppID = appID
-            }
-        }
         .onDisappear {
             for task in downloadWatchTasks.values {
                 task.cancel()
@@ -137,7 +137,7 @@ struct HomeView: View {
     }
 
     private var titleHeader: some View {
-        Text("الرئيسية")
+        Text("Ø§ÙØ±Ø¦ÙØ³ÙØ©")
             .font(.system(size: 19, weight: .semibold))
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, alignment: .center)
@@ -147,17 +147,78 @@ struct HomeView: View {
             .multilineTextAlignment(.center)
     }
 
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            TextField("", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+                .focused($searchFieldFocused)
+                .onSubmit {
+                    searchFieldFocused = false
+                }
+                .overlay(alignment: .trailing) {
+                    if searchText.isEmpty {
+                        Text("Ø£ÙØ¹Ø§Ø¨ ÙØªØ·Ø¨ÙÙØ§Øª ÙØ§ÙÙØ²ÙØ¯")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.secondary.opacity(0.65))
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .allowsHitTesting(false)
+                    }
+                }
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    searchFieldFocused = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .environment(\.layoutDirection, .rightToLeft)
+        .padding(.horizontal, 12)
+        .frame(height: 42)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 0.7)
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "square.grid.2x2")
                 .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            Text("لا توجد تطبيقات بعد")
+            Text(searchText.isEmpty ? "ÙØ§ ØªÙØ¬Ø¯ ØªØ·Ø¨ÙÙØ§Øª Ø¨Ø¹Ø¯" : "ÙØ§ ØªÙØ¬Ø¯ ÙØªØ§Ø¦Ø¬")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(.primary)
 
-            Text("أضف تطبيقاً من لوحة التحكم ليظهر هنا مباشرة.")
+            Text(
+                searchText.isEmpty
+                    ? "Ø£Ø¶Ù ØªØ·Ø¨ÙÙØ§Ù ÙÙ ÙÙØ­Ø© Ø§ÙØªØ­ÙÙ ÙÙØ¸ÙØ± ÙÙØ§ ÙØ¨Ø§Ø´Ø±Ø©."
+                    : "Ø¬Ø±ÙØ¨ Ø§ÙØ¨Ø­Ø« Ø¨Ø§Ø³Ù Ø§ÙØªØ·Ø¨ÙÙ Ø£Ù Bundle ID."
+            )
             .font(.system(size: 11, weight: .regular, design: .monospaced))
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
@@ -229,7 +290,7 @@ struct HomeView: View {
                     }
                 }
 
-                Text(loading ? "\(Int(progress * 100))%" : "تثبيت")
+                Text(loading ? "\(Int(progress * 100))%" : "ØªØ«Ø¨ÙØª")
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                     .monospacedDigit()
@@ -306,14 +367,14 @@ struct HomeView: View {
 
                 HStack(spacing: 12) {
                     pillButton(
-                        title: "تكرار",
+                        title: "ØªÙØ±Ø§Ø±",
                         isLoading: isDownloading(app)
                     ) {
                         repeatDownload(app)
                     }
 
                     pillButton(
-                        title: "تثبيت",
+                        title: "ØªØ«Ø¨ÙØª",
                         isLoading: isDownloading(app)
                     ) {
                         install(app)
@@ -359,8 +420,8 @@ struct HomeView: View {
 
     private func statsRow(_ app: StoreApp) -> some View {
         HStack(spacing: 8) {
-            statBox(title: "حجم التطبيق", value: app.sizeValueText)
-            statBox(title: "الإصدار", value: app.version)
+            statBox(title: "Ø­Ø¬Ù Ø§ÙØªØ·Ø¨ÙÙ", value: app.sizeValueText)
+            statBox(title: "Ø§ÙØ¥ØµØ¯Ø§Ø±", value: app.version)
         }
         .frame(maxWidth: .infinity, alignment: .center)
     }
@@ -372,7 +433,7 @@ struct HomeView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
 
-            Text(value.isEmpty ? "—" : value)
+            Text(value.isEmpty ? "â" : value)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
@@ -622,7 +683,7 @@ struct StoreApp: Identifiable, Decodable, Hashable {
     }
 
     var sizeValueText: String {
-        guard let sizeMB, sizeMB > 0 else { return "—" }
+        guard let sizeMB, sizeMB > 0 else { return "â" }
         return String(format: "%.1f", sizeMB)
     }
 
