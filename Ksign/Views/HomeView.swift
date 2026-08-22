@@ -696,14 +696,129 @@ struct StoreApp: Identifiable, Decodable, Hashable {
 final class KindaStoreManager: ObservableObject {
     static let shared = KindaStoreManager()
 
-    private let baseURL = "https://ibskoyypugseeixzntyt.supabase.co"
-    private let apiKey = "sb_publishable_McRq3FTx_r7pL2PbGk8YBA_mMnJmtFm"
-
     @Published var apps: [StoreApp] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
 
     private init() {}
+
+    // جميع مصادر IPA Store الموجودة في ملف ipastore-sources.md
+    private let sourceURLs: [String] = [
+        "https://community-apps.sidestore.io/sidecommunity.json",
+        "https://qnblackcat.github.io/AltStore/apps.json",
+        "https://raw.githubusercontent.com/Neoncat-OG/TrollStore-IPAs/main/apps_esign.json",
+        "https://wuxu1.github.io/wuxu-complete-plus.json",
+        "https://ipa.cypwn.xyz/cypwn.json",
+        "https://aio.yippee.rip/repo.json",
+        "https://raw.githubusercontent.com/arichornloveralt/arichornloveralt.github.io/main/apps.json",
+        "https://raw.githubusercontent.com/driftywinds/driftywinds.github.io/master/AltStore/apps.json",
+        "https://raw.githubusercontent.com/swaggyP36000/TrollStore-IPAs/main/apps_esign.json",
+        "https://repo.sourcelocation.dev/apps.json",
+        "https://raw.githubusercontent.com/FouadRaheb/AppStore/main/appstore.json",
+        "https://julio.hackyouriphone.org/apps.json",
+        "https://gbox.run/Public/Source.json",
+        "https://apps.nabzclan.vip/repos/altstore.php",
+        "https://appstore.nabzclan.vip/repos/altstoreformat2.php",
+        "https://appstore.nabzclan.vip/repos/esign.php",
+        "https://ittza7aa.com/repo.json",
+        "https://apps.altstore.io/",
+        "https://appmarket.tech/altstore.json",
+        "https://ipa.cypwn.xyz/cypwn_ts.json",
+        "https://quarksources.github.io/dist/quantumsource.min.json",
+        "https://quarksources.github.io/quarksource-cracked.json",
+        "https://wuxu1.github.io/wuxu-complete.json",
+        "https://apps.sidestore.io/",
+        "https://driftywinds.github.io/repos/esign.json",
+        "https://esign.yyyue.xyz/app.json",
+        "https://ikghd.site/repo.json",
+        "https://quarksources.github.io/quantumsource++.json",
+        "https://raw.githubusercontent.com/whoeevee/EeveeSpotify/swift/repo.json",
+        "https://xitrix.github.io/iTorrent/AltStore.json",
+        "https://ish.app/altstore.json",
+        "https://raw.githubusercontent.com/notrifty1/riftysrepo/refs/heads/main/reposource.json",
+        "https://altstore.oatmealdome.me/",
+        "https://github.com/dvntm0/AltStore/raw/refs/heads/main/feather.json",
+        "https://repo.madari.media/nightly/repo.json",
+        "https://flyinghead.github.io/flycast-builds/altstore.json",
+        "https://pokemmo.eu/altstore/",
+        "https://raw.githubusercontent.com/wwg135/wwg135.github.io/main/apps.json",
+        "https://opa334.github.io/apps.json",
+        "https://poomsmart.github.io/repo/apps.json",
+        "https://havoc.app/featured.json",
+        "https://repo.chariz.com/featured.json",
+        "https://getzbra.com/repo/apps.json",
+        "https://level3tjg.me/repo/apps.json",
+        "https://mtac.app/repo/apps.json",
+        "https://repo.palera.in/apps.json",
+        "https://luki120.github.io/apps.json",
+        "https://ios.jjolano.me/apps.json",
+        "https://ginsu.dev/repo/apps.json",
+        "https://miro92.com/repo/apps.json",
+        "https://repo.alexia.lol/apps.json",
+        "https://creaturecoding.com/repo/apps.json",
+        "https://ellekit.space/apps.json",
+        "https://sparkdev.me/apps.json",
+        "https://tigisoftware.com/repo/apps.json",
+        "https://repo.cypwn.xyz/apps.json",
+        "https://sourcelocation.github.io/repo/apps.json",
+        "https://appstore.nabzclan.vip/repos/gbox.php",
+        "https://raw.githubusercontent.com/Nyasami/Ksign/refs/heads/main/repo.json",
+        "https://fastsign.dev/repo.json",
+        "https://fastsign.dev/repo.lite.json",
+        "https://fastsign.dev/repo.lite.altstore.json",
+        "https://raw.githubusercontent.com/Gliddd4/gliddd4-repo/refs/heads/main/app.json",
+        "https://repo.chungchi365.com/repo.json",
+        "https://raw.githubusercontent.com/zigwangles/zigwangles-repo/refs/heads/main/app-repo.json",
+        "https://raw.githubusercontent.com/AntonP29/AntonP29-Repo/refs/heads/main/repo.json",
+        "https://balackburn.github.io/Apollo/apps.json",
+        "https://raw.githubusercontent.com/Auties00/Artemis/refs/heads/main/source.json",
+        "https://bunduuk.github.io/altstore-source/apps.json",
+        "https://therealfoxster.github.io/altsource/apps.json",
+        "https://github.com/khcrysalis/Feather/raw/main/app-repo.json",
+        "https://alts.lao.sb",
+        "https://buildbot.libretro.com/stable/altstore.json",
+        "https://raw.githubusercontent.com/LiveContainer/LiveContainer/refs/heads/main/apps.json",
+        "https://theodyssey.dev/altstore/odysseysource.json",
+        "https://raw.githubusercontent.com/vizunchik/AltStoreRus/master/apps.json",
+        "https://alt.crystall1ne.dev",
+        "https://provenance-emu.com/apps.json",
+        "https://randomblock1.com/altstore/apps.json",
+        "https://spotc-repo.yodaluca.dev/AltStore%20Repo.json",
+        "https://taurine.app/altstore/taurinestore.json",
+        "https://alt.getutm.app",
+        "https://raw.githubusercontent.com/Balackburn/YTLitePlusAltstore/main/apps.json",
+        "https://azu0609.github.io/repo/altstore_repo.json",
+        "https://raw.githubusercontent.com/cbruegg/altstore-source/refs/heads/main/source.json",
+        "https://alt.thatstel.la/",
+        "https://connect.sidestore.io/apps.json",
+        "https://cranci.tech/repo.json",
+        "https://binnichtaktiv.signapp.me/repo/esign.json",
+        "https://hann8n.github.io/JackCracks/MovieboxPro.json",
+        "https://ia601404.us.archive.org/11/items/ms_20220903/MS.json",
+        "https://ia601505.us.archive.org/10/items/motoca-store/Motoca%20Store.json",
+        "https://ipa.thuthuatjb.com/repo",
+        "https://raw.githubusercontent.com/lo-cafe/winston-altstore/main/apps.json",
+        "https://quarksources.github.io/quantumsource.json",
+        "https://raw.githubusercontent.com/Omni-Development/The-Omni-Repository/refs/heads/main/app-repo.json",
+        "https://raw.githubusercontent.com/RealBlackAstronaut/CelestialRepo/main/CelestialRepo.json",
+        "https://raw.githubusercontent.com/WhySooooFurious/Ultimate-Sideloading-Guide/refs/heads/main/app-repo.json",
+        "https://raw.githubusercontent.com/arichornloverALT/arichornloveralt.github.io/main/apps.json",
+        "https://raw.githubusercontent.com/arichornloverALT/arichornloveralt.github.io/main/apps2.json",
+        "https://raw.githubusercontent.com/actuallyaridan/NeoFreeBird/refs/heads/main/AltSource.json",
+        "https://raw.githubusercontent.com/ssalggnikool/.github/refs/heads/main/b.json",
+        "https://raw.githubusercontent.com/sinceohsix/lcdl-repo/refs/heads/main/repo.json",
+        "https://repo.zsign.app/repo.json",
+        "https://repos.yattee.stream/alt/apps.json",
+        "https://rickowens.su/repo.json",
+        "https://tweakrain.pages.dev/ios/altstore.json",
+        "https://website.burrito.software/altstore/channels/burritosource.json",
+        "https://www.sachcharak.com/esign/repo/RAK.json",
+        "https://raw.githubusercontent.com/DatOneFlareon/The-SEU-app-repo-for-the-gangalang/refs/heads/main/SEU.json",
+        "https://delvek.net/repo.json",
+        "https://raw.githubusercontent.com/qnblackcat/AltStore/gh-pages/apps.json",
+        "https://hottubapp.io/altstore",
+        "https://altstore.ignitedemulator.com",
+    ]
 
     func filtered(_ searchText: String) -> [StoreApp] {
         guard !searchText.isEmpty else { return apps }
@@ -711,6 +826,7 @@ final class KindaStoreManager: ObservableObject {
         return apps.filter {
             $0.name.localizedCaseInsensitiveContains(searchText)
             || $0.bundleId.localizedCaseInsensitiveContains(searchText)
+            || $0.appDescription.localizedCaseInsensitiveContains(searchText)
         }
     }
 
@@ -718,35 +834,306 @@ final class KindaStoreManager: ObservableObject {
         isLoading = true
         errorMessage = nil
 
-        defer {
-            isLoading = false
+        let sources = sourceURLs
+
+        // تحميل كل المصادر بالتوازي.
+        // فشل مصدر واحد لا يمنع ظهور تطبيقات المصادر الأخرى.
+        let loadedApps = await withTaskGroup(of: [StoreApp].self, returning: [[StoreApp]].self) { group in
+            for source in sources {
+                group.addTask {
+                    await Self.loadSource(source)
+                }
+            }
+
+            var result: [[StoreApp]] = []
+            for await sourceApps in group {
+                if !sourceApps.isEmpty {
+                    result.append(sourceApps)
+                }
+            }
+            return result
         }
 
-        guard let url = URL(
-            string: "\(baseURL)/rest/v1/store_apps?select=*&order=created_at.desc"
-        ) else {
-            errorMessage = "Invalid store URL."
-            return
+        var uniqueApps: [StoreApp] = []
+        var seenKeys = Set<String>()
+
+        for sourceApps in loadedApps {
+            for app in sourceApps {
+                let bundleKey = app.bundleId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let ipaKey = app.ipaURL.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let nameKey = app.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+                let key: String
+                if !bundleKey.isEmpty {
+                    key = "bundle:\(bundleKey)"
+                } else if !ipaKey.isEmpty {
+                    key = "ipa:\(ipaKey)"
+                } else {
+                    key = "name:\(nameKey)"
+                }
+
+                if seenKeys.insert(key).inserted {
+                    uniqueApps.append(app)
+                }
+            }
+        }
+
+        apps = uniqueApps
+        isLoading = false
+
+        if apps.isEmpty {
+            errorMessage = "لم يتم العثور على تطبيقات من المصادر الحالية."
+        }
+    }
+
+    private static func loadSource(_ source: String) async -> [StoreApp] {
+        guard let url = URL(string: source) else {
+            return []
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 25
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue(apiKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
 
-            if let httpResponse = response as? HTTPURLResponse,
-               !(200...299).contains(httpResponse.statusCode) {
-                throw URLError(.badServerResponse)
+            guard
+                let httpResponse = response as? HTTPURLResponse,
+                (200...299).contains(httpResponse.statusCode),
+                !data.isEmpty
+            else {
+                return []
             }
 
-            apps = try JSONDecoder().decode([StoreApp].self, from: data)
+            return parseApps(data: data, sourceURL: source)
         } catch {
-            errorMessage = error.localizedDescription
+            return []
         }
+    }
+
+    private static func parseApps(data: Data, sourceURL: String) -> [StoreApp] {
+        guard
+            let object = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+        else {
+            return []
+        }
+
+        var records: [[String: Any]] = []
+
+        func collect(_ value: Any) {
+            if let dictionary = value as? [String: Any] {
+                // AltStore / SideStore تستخدم غالباً apps.
+                if let apps = dictionary["apps"] {
+                    collect(apps)
+                }
+
+                // بعض المصادر تستخدم data/results/items.
+                if let data = dictionary["data"] {
+                    collect(data)
+                }
+                if let results = dictionary["results"] {
+                    collect(results)
+                }
+                if let items = dictionary["items"] {
+                    collect(items)
+                }
+
+                // إذا كان هذا السجل يحتوي رابط IPA أو الاسم، اعتبره تطبيقاً.
+                let hasName =
+                    dictionary["name"] != nil ||
+                    dictionary["title"] != nil
+
+                let hasIPA =
+                    dictionary["downloadURL"] != nil ||
+                    dictionary["download_url"] != nil ||
+                    dictionary["ipa"] != nil ||
+                    dictionary["ipa_url"] != nil ||
+                    dictionary["url"] != nil
+
+                if hasName && hasIPA {
+                    records.append(dictionary)
+                }
+
+                // دعم القواميس المتداخلة.
+                for (key, child) in dictionary {
+                    let lowerKey = key.lowercased()
+                    if lowerKey == "apps" ||
+                        lowerKey == "data" ||
+                        lowerKey == "results" ||
+                        lowerKey == "items" ||
+                        lowerKey == "applications" {
+                        collect(child)
+                    }
+                }
+            } else if let array = value as? [Any] {
+                for item in array {
+                    collect(item)
+                }
+            }
+        }
+
+        collect(object)
+
+        var result: [StoreApp] = []
+        var seen = Set<String>()
+
+        for record in records {
+            guard let app = makeStoreApp(from: record, sourceURL: sourceURL) else {
+                continue
+            }
+
+            let key = app.bundleId.isEmpty
+                ? (app.ipaURL.lowercased())
+                : (app.bundleId.lowercased())
+
+            if !key.isEmpty && seen.insert(key).inserted {
+                result.append(app)
+            }
+        }
+
+        return result
+    }
+
+    private static func makeStoreApp(
+        from dictionary: [String: Any],
+        sourceURL: String
+    ) -> StoreApp? {
+        func string(_ keys: [String]) -> String {
+            for key in keys {
+                if let value = dictionary[key] as? String,
+                   !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return value.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+
+                if let value = dictionary[key] as? NSNumber {
+                    return value.stringValue
+                }
+            }
+            return ""
+        }
+
+        func number(_ keys: [String]) -> Double? {
+            for key in keys {
+                if let value = dictionary[key] as? NSNumber {
+                    return value.doubleValue
+                }
+                if let value = dictionary[key] as? String,
+                   let number = Double(value.replacingOccurrences(of: ",", with: ".")) {
+                    return number
+                }
+            }
+            return nil
+        }
+
+        let name = string(["name", "title", "appName", "app_name"])
+        let version = string(["version", "versionName", "version_name"])
+        let bundleId = string([
+            "bundleIdentifier",
+            "bundle_identifier",
+            "bundleID",
+            "bundle_id",
+            "identifier",
+            "id"
+        ])
+
+        let description = string([
+            "description",
+            "subtitle",
+            "summary",
+            "desc"
+        ])
+
+        let category = string([
+            "category",
+            "genre",
+            "section"
+        ])
+
+        let icon = string([
+            "iconURL",
+            "icon_url",
+            "icon",
+            "iconURLTemplate",
+            "icon_url_template"
+        ])
+
+        var ipaURL = string([
+            "downloadURL",
+            "download_url",
+            "ipaURL",
+            "ipa_url",
+            "ipa",
+            "download",
+            "url"
+        ])
+
+        // بعض المصادر تضع رابط التحميل داخل versions.
+        if ipaURL.isEmpty, let versions = dictionary["versions"] as? [[String: Any]] {
+            for versionRecord in versions {
+                ipaURL = stringFromDictionary(
+                    versionRecord,
+                    keys: ["downloadURL", "download_url", "ipaURL", "ipa_url", "ipa", "url"]
+                )
+                if !ipaURL.isEmpty {
+                    break
+                }
+            }
+        }
+
+        guard !name.isEmpty, !ipaURL.isEmpty else {
+            return nil
+        }
+
+        let finalIcon = icon
+        let finalID = !bundleId.isEmpty
+            ? bundleId
+            : stableID(name: name, ipaURL: ipaURL)
+
+        return StoreApp(
+            id: finalID,
+            name: name,
+            version: version,
+            bundleId: bundleId,
+            appDescription: description,
+            category: category,
+            iconURL: finalIcon,
+            ipaURL: ipaURL,
+            sizeMB: number([
+                "sizeMB",
+                "size_mb",
+                "size",
+                "fileSizeMB",
+                "file_size_mb"
+            ])
+        )
+    }
+
+    private static func stringFromDictionary(
+        _ dictionary: [String: Any],
+        keys: [String]
+    ) -> String {
+        for key in keys {
+            if let value = dictionary[key] as? String,
+               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return value.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        return ""
+    }
+
+    private static func stableID(name: String, ipaURL: String) -> String {
+        let raw = "\(name)|\(ipaURL)"
+        var hash: UInt64 = 1469598103934665603
+
+        for byte in raw.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 1099511628211
+        }
+
+        return String(format: "%016llx", hash)
     }
 }
 
