@@ -55,7 +55,8 @@ struct HomeView: View {
     @State private var selectedAppID: String?
     @FocusState private var searchFieldFocused: Bool
 
-    @State private var selectedSource = "الكل"
+    // المصدر الوحيد هو لوحة التحكم.
+    @State private var selectedSource = "لوحة التحكم"
     @State private var selectedCategory = "الكل"
     @State private var displayLimit = 50
     @State private var isLoadingNextPage = false
@@ -91,13 +92,6 @@ struct HomeView: View {
             return true
         }
 
-        // لا نظهر "التالي" الخاص بالسيرفر عند اختيار مصدر خارجي فقط.
-        if selectedSource == "iQ" ||
-            selectedSource == "FastSign" ||
-            selectedSource == "NabzClan" {
-            return false
-        }
-
         return storeManager.hasMoreServerPages
     }
 
@@ -118,7 +112,10 @@ struct HomeView: View {
                                     .padding(.top, 24)
                             } else {
                                 VStack(spacing: 10) {
-                                    ForEach(Array(visibleApps.enumerated()), id: \.element.id) { index, app in
+                                    ForEach(
+                                        Array(visibleApps.enumerated()),
+                                        id: \.element.id
+                                    ) { index, app in
                                         if selectedAppID == app.id {
                                             expandedItem(app)
                                         } else {
@@ -129,7 +126,9 @@ struct HomeView: View {
                                             Color.clear
                                                 .frame(height: 1)
                                                 .onAppear {
-                                                    Task { await loadMoreIfNeeded() }
+                                                    Task {
+                                                        await loadMoreIfNeeded()
+                                                    }
                                                 }
                                         }
                                     }
@@ -150,6 +149,7 @@ struct HomeView: View {
                                 searchBar
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
+
                                 sourceAndCategoryFilters
                                     .padding(.bottom, 6)
                             }
@@ -167,7 +167,6 @@ struct HomeView: View {
                     selectedAppID = nil
                     await storeManager.load()
                 }
-
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -180,8 +179,7 @@ struct HomeView: View {
             }
         }
         .onDisappear {
-            // لا نلغي مراقبة التنزيل عند الانتقال إلى تبويب آخر.
-            // DownloadManager يستمر في تنزيل الملف، والإشعار يوضح الحالة.
+            // DownloadManager يستمر بعملية التنزيل عند الانتقال بين التبويبات.
         }
     }
 
@@ -246,7 +244,10 @@ struct HomeView: View {
         .environment(\.layoutDirection, .rightToLeft)
         .padding(.horizontal, 12)
         .frame(height: 42)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 0.7)
@@ -255,27 +256,28 @@ struct HomeView: View {
 
     private var sourceAndCategoryFilters: some View {
         VStack(spacing: 7) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 7) {
-                    ForEach(storeManager.availableSources, id: \.self) { source in
-                        filterChip(
-                            title: source,
-                            selected: selectedSource == source
-                        ) {
-                            selectedSource = source
-                            selectedCategory = "الكل"
-                            displayLimit = 50
-                        }
-                    }
+            // لا توجد مصادر خارجية هنا. هذا الزر يعرض فقط تطبيقات لوحة التحكم.
+            HStack(spacing: 7) {
+                filterChip(
+                    title: "لوحة التحكم",
+                    selected: selectedSource == "لوحة التحكم"
+                ) {
+                    selectedSource = "لوحة التحكم"
+                    selectedCategory = "الكل"
+                    displayLimit = 50
+                    selectedAppID = nil
                 }
-                .padding(.horizontal, 16)
             }
-            .environment(\.layoutDirection, .rightToLeft)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.horizontal, 16)
 
             if storeManager.availableCategories.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 7) {
-                        ForEach(storeManager.availableCategories, id: \.self) { category in
+                        ForEach(
+                            storeManager.availableCategories,
+                            id: \.self
+                        ) { category in
                             filterChip(
                                 title: category,
                                 selected: selectedCategory == category
@@ -311,7 +313,10 @@ struct HomeView: View {
                 )
                 .overlay {
                     Capsule()
-                        .stroke(Color.primary.opacity(selected ? 0.10 : 0.05), lineWidth: 0.6)
+                        .stroke(
+                            Color.primary.opacity(selected ? 0.10 : 0.05),
+                            lineWidth: 0.6
+                        )
                 }
         }
         .buttonStyle(.plain)
@@ -319,7 +324,9 @@ struct HomeView: View {
 
     private var nextPageButton: some View {
         Button {
-            Task { await loadMoreIfNeeded(force: true) }
+            Task {
+                await loadMoreIfNeeded(force: true)
+            }
         } label: {
             HStack(spacing: 8) {
                 if isLoadingNextPage || storeManager.isLoading {
@@ -327,8 +334,12 @@ struct HomeView: View {
                         .controlSize(.small)
                 }
 
-                Text(isLoadingNextPage ? "جاري تحميل التالي..." : "التالي")
-                    .font(.system(size: 12, weight: .semibold))
+                Text(
+                    isLoadingNextPage
+                        ? "جاري تحميل التالي..."
+                        : "التالي"
+                )
+                .font(.system(size: 12, weight: .semibold))
             }
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity)
@@ -346,22 +357,13 @@ struct HomeView: View {
     private func loadMoreIfNeeded(force: Bool = false) async {
         guard !isLoadingNextPage else { return }
 
-        // أولاً نعرض 50 إضافية من البيانات الموجودة بالفعل.
+        // أولاً نعرض التطبيقات الموجودة في الذاكرة.
         if displayLimit < filteredApps.count {
             displayLimit += 50
             return
         }
 
-        // المصادر الخارجية الثلاثة يتم تحميل بياناتها مرة واحدة،
-        // لذلك إذا وصلنا لنهايتها لا نطلب أي مصدر قديم.
-        let isExternalOnly =
-            selectedSource == "iQ" ||
-            selectedSource == "FastSign" ||
-            selectedSource == "NabzClan"
-
-        guard !isExternalOnly,
-              storeManager.hasMoreServerPages
-        else {
+        guard storeManager.hasMoreServerPages else {
             return
         }
 
@@ -374,8 +376,9 @@ struct HomeView: View {
 
         await storeManager.loadNextServerPage()
 
-        // لا نعرض إلا 50 تطبيقًا إضافيًا في كل مرة.
-        displayLimit += 50
+        if displayLimit < filteredApps.count {
+            displayLimit += 50
+        }
     }
 
     private var emptyState: some View {
@@ -384,23 +387,36 @@ struct HomeView: View {
                 .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            Text(searchText.isEmpty ? "لا توجد تطبيقات بعد" : "لا توجد نتائج")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.primary)
+            Text(
+                searchText.isEmpty
+                    ? "لا توجد تطبيقات بعد"
+                    : "لا توجد نتائج"
+            )
+            .font(.system(size: 15, weight: .medium))
+            .foregroundStyle(.primary)
 
             Text(
                 searchText.isEmpty
                     ? "أضف تطبيقاً من لوحة التحكم ليظهر هنا مباشرة."
                     : "جرّب البحث باسم التطبيق أو Bundle ID."
             )
-            .font(.system(size: 11, weight: .regular, design: .monospaced))
+            .font(
+                .system(
+                    size: 11,
+                    weight: .regular,
+                    design: .monospaced
+                )
+            )
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
         .padding(.horizontal, 20)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 0.7)
@@ -412,19 +428,27 @@ struct HomeView: View {
     private func rowView(_ app: StoreApp) -> some View {
         HStack(spacing: 12) {
             Button {
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                withAnimation(
+                    .spring(response: 0.32, dampingFraction: 0.86)
+                ) {
                     selectedAppID = app.id
                 }
             } label: {
                 HStack(spacing: 12) {
-                    StoreIconView(urlString: app.iconURL, size: 44)
+                    StoreIconView(
+                        urlString: app.iconURL,
+                        size: 44
+                    )
 
                     Text(app.name)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .frame(
+                            maxWidth: .infinity,
+                            alignment: .trailing
+                        )
                 }
                 .contentShape(Rectangle())
             }
@@ -452,30 +476,55 @@ struct HomeView: View {
                 if loading {
                     ZStack {
                         Circle()
-                            .stroke(Color.secondary.opacity(0.25), lineWidth: 2)
+                            .stroke(
+                                Color.secondary.opacity(0.25),
+                                lineWidth: 2
+                            )
                             .frame(width: 14, height: 14)
 
                         Circle()
-                            .trim(from: 0, to: max(0.03, progress))
-                            .stroke(Color.primary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                            .trim(
+                                from: 0,
+                                to: max(0.03, progress)
+                            )
+                            .stroke(
+                                Color.primary,
+                                style: StrokeStyle(
+                                    lineWidth: 2,
+                                    lineCap: .round
+                                )
+                            )
                             .frame(width: 14, height: 14)
                             .rotationEffect(.degrees(-90))
-                            .animation(.linear(duration: 0.2), value: progress)
+                            .animation(
+                                .linear(duration: 0.2),
+                                value: progress
+                            )
                     }
                 }
 
-                Text(loading ? "\(Int(progress * 100))%" : "تثبيت")
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
-                    .monospacedDigit()
+                Text(
+                    loading
+                        ? "\(Int(progress * 100))%"
+                        : "تثبيت"
+                )
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+                .monospacedDigit()
             }
             .foregroundStyle(.primary)
             .padding(.horizontal, 12)
             .frame(height: 30)
-            .background(Color.secondary.opacity(0.14), in: Capsule())
+            .background(
+                Color.secondary.opacity(0.14),
+                in: Capsule()
+            )
             .overlay {
                 Capsule()
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.6)
+                    .stroke(
+                        Color.primary.opacity(0.08),
+                        lineWidth: 0.6
+                    )
             }
         }
         .buttonStyle(.plain)
@@ -488,7 +537,9 @@ struct HomeView: View {
                 expandedCard(app)
 
                 Button {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                    withAnimation(
+                        .spring(response: 0.32, dampingFraction: 0.86)
+                    ) {
                         selectedAppID = nil
                     }
                 } label: {
@@ -496,8 +547,15 @@ struct HomeView: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.primary)
                         .frame(width: 42, height: 42)
-                        .background(.regularMaterial, in: Circle())
-                        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+                        .background(
+                            .regularMaterial,
+                            in: Circle()
+                        )
+                        .shadow(
+                            color: .black.opacity(0.18),
+                            radius: 10,
+                            y: 4
+                        )
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 12)
@@ -511,7 +569,9 @@ struct HomeView: View {
     private func expandedCard(_ app: StoreApp) -> some View {
         ZStack {
             GeometryReader { proxy in
-                AsyncImage(url: URL(string: app.iconURL)) { image in
+                AsyncImage(
+                    url: URL(string: app.iconURL)
+                ) { image in
                     image
                         .resizable()
                         .scaledToFill()
@@ -519,7 +579,10 @@ struct HomeView: View {
                     Rectangle()
                         .fill(Color.black)
                 }
-                .frame(width: proxy.size.width, height: proxy.size.height)
+                .frame(
+                    width: proxy.size.width,
+                    height: proxy.size.height
+                )
                 .blur(radius: 58)
                 .overlay(Color.black.opacity(0.46))
                 .clipped()
@@ -530,8 +593,15 @@ struct HomeView: View {
                 .opacity(0.20)
 
             VStack(spacing: 16) {
-                StoreIconView(urlString: app.iconURL, size: 108)
-                    .shadow(color: .black.opacity(0.35), radius: 16, y: 10)
+                StoreIconView(
+                    urlString: app.iconURL,
+                    size: 108
+                )
+                .shadow(
+                    color: .black.opacity(0.35),
+                    radius: 16,
+                    y: 10
+                )
 
                 Text(app.name)
                     .font(.system(size: 22, weight: .heavy))
@@ -561,10 +631,21 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(minHeight: 260)
-        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 32,
+                style: .continuous
+            )
+        )
         .overlay {
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+            RoundedRectangle(
+                cornerRadius: 32,
+                style: .continuous
+            )
+            .stroke(
+                Color.white.opacity(0.10),
+                lineWidth: 0.8
+            )
         }
     }
 
@@ -586,7 +667,10 @@ struct HomeView: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 24)
             .frame(height: 44)
-            .background(Color.white.opacity(0.22), in: Capsule())
+            .background(
+                Color.white.opacity(0.22),
+                in: Capsule()
+            )
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
@@ -594,13 +678,26 @@ struct HomeView: View {
 
     private func statsRow(_ app: StoreApp) -> some View {
         HStack(spacing: 8) {
-            statBox(title: "حجم التطبيق", value: app.sizeValueText)
-            statBox(title: "الإصدار", value: app.version)
+            statBox(
+                title: "حجم التطبيق",
+                value: app.sizeValueText
+            )
+
+            statBox(
+                title: "الإصدار",
+                value: app.version
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(
+            maxWidth: .infinity,
+            alignment: .center
+        )
     }
 
-    private func statBox(title: String, value: String) -> some View {
+    private func statBox(
+        title: String,
+        value: String
+    ) -> some View {
         VStack(spacing: 2) {
             Text(title)
                 .font(.system(size: 9, weight: .medium))
@@ -614,10 +711,22 @@ struct HomeView: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(width: 104, height: 46)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(
+                cornerRadius: 12,
+                style: .continuous
+            )
+        )
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 0.6)
+            RoundedRectangle(
+                cornerRadius: 12,
+                style: .continuous
+            )
+            .stroke(
+                Color.primary.opacity(0.06),
+                lineWidth: 0.6
+            )
         }
     }
 
@@ -638,7 +747,9 @@ struct HomeView: View {
         }
     }
 
-    private func resolveDownloadURL(_ rawURL: String) async -> URL? {
+    private func resolveDownloadURL(
+        _ rawURL: String
+    ) async -> URL? {
         guard let url = URL(string: rawURL) else {
             return nil
         }
@@ -654,10 +765,16 @@ struct HomeView: View {
         }
 
         guard
-            let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-            let manifestString = components.queryItems?.first(where: {
-                $0.name.caseInsensitiveCompare("url") == .orderedSame
-            })?.value,
+            let components = URLComponents(
+                url: url,
+                resolvingAgainstBaseURL: false
+            ),
+            let manifestString = components.queryItems?.first(
+                where: {
+                    $0.name.caseInsensitiveCompare("url")
+                        == .orderedSame
+                }
+            )?.value,
             let manifestURL = URL(string: manifestString)
         else {
             return nil
@@ -666,21 +783,33 @@ struct HomeView: View {
         do {
             var request = URLRequest(url: manifestURL)
             request.timeoutInterval = 20
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.setValue("application/xml, text/xml, */*", forHTTPHeaderField: "Accept")
+            request.cachePolicy =
+                .reloadIgnoringLocalCacheData
+            request.setValue(
+                "application/xml, text/xml, */*",
+                forHTTPHeaderField: "Accept"
+            )
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) =
+                try await URLSession.shared.data(
+                    for: request
+                )
 
             guard
                 let http = response as? HTTPURLResponse,
                 (200...299).contains(http.statusCode),
                 !data.isEmpty,
-                let xml = String(data: data, encoding: .utf8)
+                let xml = String(
+                    data: data,
+                    encoding: .utf8
+                )
             else {
                 return nil
             }
 
-            let pattern = #"<key>\s*url\s*</key>\s*<string>\s*([^<\s]+)\s*</string>"#
+            let pattern =
+                #"<key>\s*url\s*</key>\s*<string>\s*([^<\s]+)\s*</string>"#
+
             guard
                 let regex = try? NSRegularExpression(
                     pattern: pattern,
@@ -690,24 +819,41 @@ struct HomeView: View {
                 return nil
             }
 
-            let range = NSRange(xml.startIndex..<xml.endIndex, in: xml)
+            let range = NSRange(
+                xml.startIndex..<xml.endIndex,
+                in: xml
+            )
 
             guard
-                let match = regex.firstMatch(in: xml, options: [], range: range),
+                let match = regex.firstMatch(
+                    in: xml,
+                    options: [],
+                    range: range
+                ),
                 match.numberOfRanges > 1,
-                let valueRange = Range(match.range(at: 1), in: xml)
+                let valueRange = Range(
+                    match.range(at: 1),
+                    in: xml
+                )
             else {
                 return nil
             }
 
             let ipaString = String(xml[valueRange])
-                .replacingOccurrences(of: "&amp;", with: "&")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(
+                    of: "&amp;",
+                    with: "&"
+                )
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
 
             guard
                 let ipaURL = URL(string: ipaString),
-                let ipaScheme = ipaURL.scheme?.lowercased(),
-                ipaScheme == "http" || ipaScheme == "https"
+                let ipaScheme =
+                    ipaURL.scheme?.lowercased(),
+                ipaScheme == "http" ||
+                ipaScheme == "https"
             else {
                 return nil
             }
@@ -728,15 +874,25 @@ struct HomeView: View {
         }
     }
 
-    private func startStoreDownload(for app: StoreApp) async {
-        guard !isDownloading(app) else { return }
+    private func startStoreDownload(
+        for app: StoreApp
+    ) async {
+        guard !isDownloading(app) else {
+            return
+        }
 
-        guard let url = await resolveDownloadURL(
-            app.ipaURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        ) else {
+        guard
+            let url = await resolveDownloadURL(
+                app.ipaURL.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+            )
+        else {
             UIAlertController.showAlertWithOk(
                 title: .localized("خطأ"),
-                message: .localized("رابط ملف IPA غير صالح أو لا يحتوي على ملف IPA مباشر.")
+                message: .localized(
+                    "رابط ملف IPA غير صالح أو لا يحتوي على ملف IPA مباشر."
+                )
             )
             return
         }
@@ -746,10 +902,17 @@ struct HomeView: View {
         )
 
         let startedAt = Date()
-        let downloadID = "KindaStore_\(app.id)_\(UUID().uuidString)"
 
-        let backgroundToken = BackgroundExecutionToken(name: "iQiraq IPA Download")
-        backgroundTaskTokens[app.id] = backgroundToken
+        let downloadID =
+            "KindaStore_\(app.id)_\(UUID().uuidString)"
+
+        let backgroundToken =
+            BackgroundExecutionToken(
+                name: "KindaStore IPA Download"
+            )
+
+        backgroundTaskTokens[app.id] =
+            backgroundToken
 
         let download = downloadManager.startDownload(
             from: url,
@@ -761,11 +924,11 @@ struct HomeView: View {
         watchStoreDownload(
             download,
             app: app,
-            existingImportedUUIDs: existingImportedUUIDs,
+            existingImportedUUIDs:
+                existingImportedUUIDs,
             startedAt: startedAt
         )
     }
-
 }
 
 extension HomeView {
@@ -780,9 +943,15 @@ extension HomeView {
         downloadWatchTasks[downloadID]?.cancel()
 
         let task = Task { @MainActor in
-            let timeout: UInt64 = 15 * 60 * 1_000_000_000
-            let pollInterval: UInt64 = 300_000_000
-            let deadline = DispatchTime.now().uptimeNanoseconds + timeout
+            let timeout: UInt64 =
+                15 * 60 * 1_000_000_000
+
+            let pollInterval: UInt64 =
+                300_000_000
+
+            let deadline =
+                DispatchTime.now().uptimeNanoseconds
+                + timeout
 
             var reachedDownloadCompletion = false
 
@@ -801,8 +970,12 @@ extension HomeView {
                     return
                 }
 
-                if let currentDownload = DownloadManager.shared.getDownload(by: downloadID) {
-                    downloadProgress[app.id] = currentDownload.progress
+                if let currentDownload =
+                    DownloadManager.shared.getDownload(
+                        by: downloadID
+                    ) {
+                    downloadProgress[app.id] =
+                        currentDownload.progress
 
                     if currentDownload.totalBytes > 0 {
                         StoreNotificationManager.postProgress(
@@ -819,14 +992,19 @@ extension HomeView {
                     downloadProgress[app.id] = 1.0
                 }
 
-                if DispatchTime.now().uptimeNanoseconds >= deadline {
+                if DispatchTime.now().uptimeNanoseconds
+                    >= deadline {
                     break
                 }
 
-                try? await Task.sleep(nanoseconds: pollInterval)
+                try? await Task.sleep(
+                    nanoseconds: pollInterval
+                )
             }
 
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                return
+            }
 
             if let imported = findNewImportedApp(
                 for: app,
@@ -873,20 +1051,28 @@ extension HomeView {
 
             if let identifier = imported.identifier,
                !app.bundleId.isEmpty,
-               identifier.caseInsensitiveCompare(app.bundleId) == .orderedSame {
+               identifier.caseInsensitiveCompare(
+                    app.bundleId
+               ) == .orderedSame {
                 return true
             }
 
             if let name = imported.name,
                let version = imported.version,
                !app.version.isEmpty,
-               name.localizedCaseInsensitiveCompare(app.name) == .orderedSame,
-               version.caseInsensitiveCompare(app.version) == .orderedSame {
+               name.localizedCaseInsensitiveCompare(
+                    app.name
+               ) == .orderedSame,
+               version.caseInsensitiveCompare(
+                    app.version
+               ) == .orderedSame {
                 return true
             }
 
             if let name = imported.name {
-                return name.localizedCaseInsensitiveCompare(app.name) == .orderedSame
+                return name.localizedCaseInsensitiveCompare(
+                    app.name
+                ) == .orderedSame
             }
 
             return false
@@ -903,19 +1089,14 @@ extension HomeView {
         downloadWatchTasks[downloadID] = nil
         downloadProgress[app.id] = nil
 
-        backgroundTaskTokens.removeValue(forKey: app.id)?.end()
+        backgroundTaskTokens
+            .removeValue(forKey: app.id)?
+            .end()
 
-        if success {
-            StoreNotificationManager.postFinished(
-                appName: app.name,
-                success: true
-            )
-        } else {
-            StoreNotificationManager.postFinished(
-                appName: app.name,
-                success: false
-            )
-        }
+        StoreNotificationManager.postFinished(
+            appName: app.name,
+            success: success
+        )
 
         guard success, imported != nil else {
             UIAlertController.showAlertWithOk(
@@ -929,7 +1110,9 @@ extension HomeView {
 
         DispatchQueue.main.async {
             NotificationCenter.default.post(
-                name: NSNotification.Name("ksign.openLibraryTab"),
+                name: NSNotification.Name(
+                    "ksign.openLibraryTab"
+                ),
                 object: nil
             )
         }
@@ -990,44 +1173,114 @@ struct StoreApp: Identifiable, Decodable, Hashable {
     }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let container =
+            try decoder.container(
+                keyedBy: CodingKeys.self
+            )
 
-        id = (try? container.decode(String.self, forKey: .id)) ?? UUID().uuidString
-        name = (try? container.decode(String.self, forKey: .name)) ?? ""
-        version = (try? container.decode(String.self, forKey: .version)) ?? ""
-        bundleId = (try? container.decode(String.self, forKey: .bundleId)) ?? ""
-        appDescription = (try? container.decode(String.self, forKey: .appDescription)) ?? ""
-        category = (try? container.decode(String.self, forKey: .category)) ?? "أخرى"
-        iconURL = (try? container.decode(String.self, forKey: .iconURL)) ?? ""
-        ipaURL = (try? container.decode(String.self, forKey: .ipaURL)) ?? ""
-        sizeMB = try? container.decode(Double.self, forKey: .sizeMB)
-        sourceName = (try? container.decode(String.self, forKey: .sourceName)) ?? "لوحة التحكم"
-        isServerApp = (try? container.decode(Bool.self, forKey: .isServerApp)) ?? true
+        id =
+            (try? container.decode(
+                String.self,
+                forKey: .id
+            )) ?? UUID().uuidString
+
+        name =
+            (try? container.decode(
+                String.self,
+                forKey: .name
+            )) ?? ""
+
+        version =
+            (try? container.decode(
+                String.self,
+                forKey: .version
+            )) ?? ""
+
+        bundleId =
+            (try? container.decode(
+                String.self,
+                forKey: .bundleId
+            )) ?? ""
+
+        appDescription =
+            (try? container.decode(
+                String.self,
+                forKey: .appDescription
+            )) ?? ""
+
+        category =
+            (try? container.decode(
+                String.self,
+                forKey: .category
+            )) ?? "أخرى"
+
+        iconURL =
+            (try? container.decode(
+                String.self,
+                forKey: .iconURL
+            )) ?? ""
+
+        ipaURL =
+            (try? container.decode(
+                String.self,
+                forKey: .ipaURL
+            )) ?? ""
+
+        sizeMB =
+            try? container.decode(
+                Double.self,
+                forKey: .sizeMB
+            )
+
+        sourceName =
+            (try? container.decode(
+                String.self,
+                forKey: .sourceName
+            )) ?? "لوحة التحكم"
+
+        isServerApp =
+            (try? container.decode(
+                Bool.self,
+                forKey: .isServerApp
+            )) ?? true
     }
 
     var sizeText: String? {
-        guard let sizeMB, sizeMB > 0 else { return nil }
-
-        if sizeMB >= 1024 {
-            return String(format: "%.2f GB", sizeMB / 1024)
+        guard let sizeMB, sizeMB > 0 else {
+            return nil
         }
 
-        return String(format: "%.0f MB", sizeMB)
+        if sizeMB >= 1024 {
+            return String(
+                format: "%.2f GB",
+                sizeMB / 1024
+            )
+        }
+
+        return String(
+            format: "%.0f MB",
+            sizeMB
+        )
     }
 
     var sizeValueText: String {
-        guard let sizeMB, sizeMB > 0 else { return "—" }
-        return String(format: "%.1f", sizeMB)
+        guard let sizeMB, sizeMB > 0 else {
+            return "—"
+        }
+
+        return String(
+            format: "%.1f",
+            sizeMB
+        )
     }
 
     var shortIdentifier: String {
-        bundleId.split(separator: ".").last.map(String.init) ?? bundleId
+        bundleId
+            .split(separator: ".")
+            .last
+            .map(String.init)
+            ?? bundleId
     }
-}
-
-struct StoreSource: Hashable {
-    let name: String
-    let url: String
 }
 
 @MainActor
@@ -1035,81 +1288,84 @@ final class KindaStoreManager: ObservableObject {
     static let shared = KindaStoreManager()
 
     // ============================================================
-    // السيرفر الأساسي من لوحة التحكم — لا يتم حذفه.
+    // المصدر الوحيد: لوحة التحكم / Supabase
     // ============================================================
-    private let baseURL = "https://ibskoyypugseeixzntyt.supabase.co"
-    private let apiKey = "sb_publishable_McRq3FTx_r7pL2PbGk8YBA_mMnJmtFm"
+    private let baseURL =
+        "https://ibskoyypugseeixzntyt.supabase.co"
 
-    // يتم جلب 50 فقط في كل صفحة من السيرفر.
+    private let apiKey =
+        "sb_publishable_McRq3FTx_r7pL2PbGk8YBA_mMnJmtFm"
+
     private let pageSize = 50
     private var serverPage = 0
     private(set) var hasMoreServerPages = true
-
-    // ============================================================
-    // المصادر الخارجية المسموح بها فقط — لا توجد أي مصادر أخرى.
-    // ============================================================
-    private let sources: [StoreSource] = [
-        StoreSource(
-            name: "iQ",
-            url: "https://raw.githubusercontent.com/ikiraplus/ipastore/main/jom.json"
-        ),
-        StoreSource(
-            name: "FastSign",
-            url: "https://fastsign.dev/repo.lite.json"
-        ),
-        StoreSource(
-            name: "NabzClan",
-            url: "https://apps.nabzclan.vip/repos/altstore.php"
-        )
-    ]
 
     @Published var apps: [StoreApp] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
 
+    // لا توجد أي مصادر خارجية.
     @Published private(set) var availableSources: [String] = [
-        "الكل",
-        "لوحة التحكم",
-        "iQ",
-        "FastSign",
-        "NabzClan"
+        "لوحة التحكم"
     ]
 
-    @Published private(set) var availableCategories: [String] = ["الكل"]
+    @Published private(set) var availableCategories: [String] = [
+        "الكل"
+    ]
 
     private init() {}
 
     func filtered(
         _ searchText: String,
-        source: String = "الكل",
+        source: String = "لوحة التحكم",
         category: String = "الكل"
     ) -> [StoreApp] {
         let query = searchText
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
 
         return apps.filter { app in
+            // جميع البيانات هنا من لوحة التحكم فقط.
             let sourceMatch =
+                app.sourceName.caseInsensitiveCompare(
+                    "لوحة التحكم"
+                ) == .orderedSame ||
+                app.isServerApp
+
+            let requestedSourceMatch =
                 source == "الكل" ||
-                app.sourceName.caseInsensitiveCompare(source) == .orderedSame
+                source == "لوحة التحكم"
 
             let categoryMatch =
                 category == "الكل" ||
-                app.category.caseInsensitiveCompare(category) == .orderedSame
+                app.category.caseInsensitiveCompare(
+                    category
+                ) == .orderedSame
 
             let searchMatch =
                 query.isEmpty ||
-                app.name.localizedCaseInsensitiveContains(query) ||
-                app.bundleId.localizedCaseInsensitiveContains(query) ||
-                app.appDescription.localizedCaseInsensitiveContains(query)
+                app.name.localizedCaseInsensitiveContains(
+                    query
+                ) ||
+                app.bundleId.localizedCaseInsensitiveContains(
+                    query
+                ) ||
+                app.appDescription.localizedCaseInsensitiveContains(
+                    query
+                )
 
-            return sourceMatch && categoryMatch && searchMatch
+            return sourceMatch &&
+                requestedSourceMatch &&
+                categoryMatch &&
+                searchMatch
         }
     }
 
-    // MARK: - التحميل الأول
-
     func load() async {
-        guard !isLoading else { return }
+        guard !isLoading else {
+            return
+        }
 
         isLoading = true
         errorMessage = nil
@@ -1118,60 +1374,66 @@ final class KindaStoreManager: ObservableObject {
         hasMoreServerPages = true
         apps.removeAll(keepingCapacity: true)
 
-        // السيرفر والمصادر الثلاثة تعمل معًا.
-        async let serverApps = loadServerPage(page: 0)
-        async let externalApps = loadExternalSources()
+        // تحميل لوحة التحكم فقط.
+        let serverResult =
+            await loadServerPage(page: 0)
 
-        let (serverResult, externalResult) = await (
-            serverApps,
-            externalApps
-        )
-
-        // تطبيقات لوحة التحكم لها الأولوية عند التكرار.
         merge(serverResult)
-        merge(externalResult)
 
         serverPage = 1
-        hasMoreServerPages = serverResult.count == pageSize
+        hasMoreServerPages =
+            serverResult.count == pageSize
 
         rebuildFilters()
+
         isLoading = false
 
         if apps.isEmpty {
-            errorMessage = "لم يتم العثور على تطبيقات."
+            errorMessage =
+                "لم يتم العثور على تطبيقات من لوحة التحكم."
         }
     }
 
-    // MARK: - الصفحة التالية
-
     func loadNextServerPage() async {
-        guard hasMoreServerPages, !isLoading else { return }
+        guard hasMoreServerPages,
+              !isLoading
+        else {
+            return
+        }
 
         isLoading = true
-        let page = serverPage
 
-        let newApps = await loadServerPage(page: page)
+        let page = serverPage
+        let newApps =
+            await loadServerPage(page: page)
 
         if newApps.isEmpty {
             hasMoreServerPages = false
         } else {
             merge(newApps)
+
             serverPage += 1
-            hasMoreServerPages = newApps.count == pageSize
+
+            hasMoreServerPages =
+                newApps.count == pageSize
+
             rebuildFilters()
         }
 
         isLoading = false
     }
 
-    // MARK: - سيرفر لوحة التحكم
-
-    private func loadServerPage(page: Int) async -> [StoreApp] {
+    private func loadServerPage(
+        page: Int
+    ) async -> [StoreApp] {
         let offset = page * pageSize
 
-        guard let url = URL(
-            string: "\(baseURL)/rest/v1/store_apps"
-        ) else {
+        guard
+            let url = URL(
+                string:
+                    "\(baseURL)/rest/v1/store_apps"
+            )
+        else {
             return []
         }
 
@@ -1181,38 +1443,65 @@ final class KindaStoreManager: ObservableObject {
         )
 
         components?.queryItems = [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "created_at.desc"),
-            URLQueryItem(name: "offset", value: String(offset)),
-            URLQueryItem(name: "limit", value: String(pageSize))
+            URLQueryItem(
+                name: "select",
+                value: "*"
+            ),
+            URLQueryItem(
+                name: "order",
+                value: "created_at.desc"
+            ),
+            URLQueryItem(
+                name: "offset",
+                value: String(offset)
+            ),
+            URLQueryItem(
+                name: "limit",
+                value: String(pageSize)
+            )
         ]
 
-        guard let requestURL = components?.url else {
+        guard
+            let requestURL = components?.url
+        else {
             return []
         }
 
-        var request = URLRequest(url: requestURL)
+        var request =
+            URLRequest(url: requestURL)
+
         request.httpMethod = "GET"
         request.timeoutInterval = 20
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue(apiKey, forHTTPHeaderField: "apikey")
+        request.cachePolicy =
+            .reloadIgnoringLocalCacheData
+
+        request.setValue(
+            apiKey,
+            forHTTPHeaderField: "apikey"
+        )
+
         request.setValue(
             "Bearer \(apiKey)",
             forHTTPHeaderField: "Authorization"
         )
+
         request.setValue(
             "application/json",
             forHTTPHeaderField: "Accept"
         )
 
         do {
-            let (data, response) = try await URLSession.shared.data(
-                for: request
-            )
+            let (data, response) =
+                try await URLSession.shared.data(
+                    for: request
+                )
 
             guard
-                let http = response as? HTTPURLResponse,
-                (200...299).contains(http.statusCode),
+                let http =
+                    response as? HTTPURLResponse,
+                (200...299).contains(
+                    http.statusCode
+                ),
                 !data.isEmpty
             else {
                 return []
@@ -1227,356 +1516,20 @@ final class KindaStoreManager: ObservableObject {
         }
     }
 
-    // MARK: - المصادر الثلاثة
-
-    private func loadExternalSources() async -> [StoreApp] {
-        await withTaskGroup(
-            of: [StoreApp].self,
-            returning: [StoreApp].self
-        ) { group in
-            for source in sources {
-                group.addTask {
-                    await Self.loadExternalSource(source)
-                }
-            }
-
-            var result: [StoreApp] = []
-            var seen = Set<String>()
-
-            for await sourceApps in group {
-                for app in sourceApps {
-                    let key = Self.uniqueKey(for: app)
-
-                    if seen.insert(key).inserted {
-                        result.append(app)
-                    }
-                }
-            }
-
-            return result
+    private func merge(
+        _ newApps: [StoreApp]
+    ) {
+        guard !newApps.isEmpty else {
+            return
         }
-    }
-
-    private static func loadExternalSource(
-        _ source: StoreSource
-    ) async -> [StoreApp] {
-        guard let url = URL(string: source.url) else {
-            return []
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = 25
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue(
-            "application/json, text/plain, */*",
-            forHTTPHeaderField: "Accept"
-        )
-        request.setValue(
-            "iQiraq/1.0",
-            forHTTPHeaderField: "User-Agent"
-        )
-
-        do {
-            let (data, response) = try await URLSession.shared.data(
-                for: request
-            )
-
-            guard
-                let http = response as? HTTPURLResponse,
-                (200...299).contains(http.statusCode),
-                !data.isEmpty
-            else {
-                return []
-            }
-
-            return parseExternalApps(
-                data: data,
-                sourceName: source.name
-            )
-        } catch {
-            return []
-        }
-    }
-
-    // MARK: - تحليل المصدر
-
-    private static func parseExternalApps(
-        data: Data,
-        sourceName: String
-    ) -> [StoreApp] {
-        guard let object = try? JSONSerialization.jsonObject(
-            with: data,
-            options: [.fragmentsAllowed]
-        ) else {
-            return []
-        }
-
-        var records: [[String: Any]] = []
-
-        func collect(_ value: Any) {
-            if let dictionary = value as? [String: Any] {
-                let name = firstString(
-                    dictionary,
-                    keys: [
-                        "name",
-                        "title",
-                        "appName",
-                        "app_name"
-                    ]
-                )
-
-                let ipa = firstString(
-                    dictionary,
-                    keys: [
-                        "ipaUrl",
-                        "ipaURL",
-                        "ipa_url",
-                        "downloadURL",
-                        "download_url",
-                        "download",
-                        "down",
-                        "ipa",
-                        "url"
-                    ]
-                )
-
-                let hidden = firstBool(
-                    dictionary,
-                    keys: [
-                        "hidden",
-                        "isHidden"
-                    ]
-                )
-
-                if !name.isEmpty && !ipa.isEmpty && !hidden {
-                    records.append(dictionary)
-                }
-
-                for key in [
-                    "apps",
-                    "data",
-                    "results",
-                    "items",
-                    "applications",
-                    "versions"
-                ] {
-                    if let child = dictionary[key] {
-                        collect(child)
-                    }
-                }
-            } else if let array = value as? [Any] {
-                for item in array {
-                    collect(item)
-                }
-            }
-        }
-
-        collect(object)
-
-        var result: [StoreApp] = []
-        var seen = Set<String>()
-
-        for record in records {
-            guard let app = makeStoreApp(
-                from: record,
-                sourceName: sourceName
-            ) else {
-                continue
-            }
-
-            let key = uniqueKey(for: app)
-
-            if seen.insert(key).inserted {
-                result.append(app)
-            }
-        }
-
-        return result
-    }
-
-    private static func makeStoreApp(
-        from dictionary: [String: Any],
-        sourceName: String
-    ) -> StoreApp? {
-        let name = firstString(
-            dictionary,
-            keys: [
-                "name",
-                "title",
-                "appName",
-                "app_name"
-            ]
-        )
-
-        let version = firstString(
-            dictionary,
-            keys: [
-                "version",
-                "versionName",
-                "version_name"
-            ]
-        )
-
-        let bundleId = firstString(
-            dictionary,
-            keys: [
-                "bundleIdentifier",
-                "bundle_identifier",
-                "bundleID",
-                "bundle_id",
-                "identifier"
-            ]
-        )
-
-        let description = firstString(
-            dictionary,
-            keys: [
-                "localizedDescription",
-                "description",
-                "subtitle",
-                "summary",
-                "note",
-                "desc"
-            ]
-        )
-
-        let categoryValue = firstString(
-            dictionary,
-            keys: [
-                "category",
-                "genre",
-                "section"
-            ]
-        )
-
-        let category = categoryValue.isEmpty
-            ? "أخرى"
-            : categoryValue
-
-        let icon = firstString(
-            dictionary,
-            keys: [
-                "iconURL",
-                "icon_url",
-                "icon",
-                "iconUrl",
-                "iconURLTemplate"
-            ]
-        )
-
-        var ipaURL = firstString(
-            dictionary,
-            keys: [
-                "ipaUrl",
-                "ipaURL",
-                "ipa_url",
-                "downloadURL",
-                "download_url",
-                "down",
-                "download",
-                "ipa"
-            ]
-        )
-
-        // دعم النسخ التي تضع رابط IPA داخل versions.
-        if ipaURL.isEmpty,
-           let versions = dictionary["versions"] as? [[String: Any]] {
-            for versionRecord in versions {
-                let candidate = firstString(
-                    versionRecord,
-                    keys: [
-                        "ipaUrl",
-                        "ipaURL",
-                        "ipa_url",
-                        "downloadURL",
-                        "download_url",
-                        "down",
-                        "download",
-                        "ipa",
-                        "url"
-                    ]
-                )
-
-                if !candidate.isEmpty {
-                    ipaURL = candidate
-                    break
-                }
-            }
-        }
-
-        guard !name.isEmpty, !ipaURL.isEmpty else {
-            return nil
-        }
-
-        // إذا كان الرابط HTTP/HTTPS فهو جاهز للتنزيل.
-        // إذا كان itms-services، نحاول استخراج IPA من الـManifest
-        // عند الضغط على تثبيت داخل HomeView.
-        guard let url = URL(string: ipaURL),
-              let scheme = url.scheme?.lowercased(),
-              scheme == "http" ||
-              scheme == "https" ||
-              scheme == "itms-services"
-        else {
-            return nil
-        }
-
-        let rawSize = firstSize(
-            dictionary,
-            keys: [
-                "sizeMB",
-                "size_mb",
-                "fileSizeMB",
-                "file_size_mb",
-                "size"
-            ]
-        )
-
-        let normalizedSizeMB: Double?
-
-        if let size = rawSize {
-            if size > 10_000 {
-                normalizedSizeMB = size / 1_048_576.0
-            } else {
-                normalizedSizeMB = size
-            }
-        } else {
-            normalizedSizeMB = nil
-        }
-
-        let id = !bundleId.isEmpty
-            ? "\(sourceName)_\(bundleId)"
-            : stableID(
-                name: name,
-                ipaURL: ipaURL
-            )
-
-        return StoreApp(
-            id: id,
-            name: name,
-            version: version,
-            bundleId: bundleId,
-            appDescription: description,
-            category: category,
-            iconURL: icon,
-            ipaURL: ipaURL,
-            sizeMB: normalizedSizeMB,
-            sourceName: sourceName,
-            isServerApp: false
-        )
-    }
-
-    // MARK: - الدمج والفلاتر
-
-    private func merge(_ newApps: [StoreApp]) {
-        guard !newApps.isEmpty else { return }
 
         var existing = Set(
             apps.map(Self.uniqueKey)
         )
 
         for app in newApps {
-            let key = Self.uniqueKey(for: app)
+            let key =
+                Self.uniqueKey(for: app)
 
             if existing.insert(key).inserted {
                 apps.append(app)
@@ -1588,159 +1541,39 @@ final class KindaStoreManager: ObservableObject {
         let categories = Set(
             apps
                 .map {
-                    $0.category
-                        .trimmingCharacters(
-                            in: .whitespacesAndNewlines
-                        )
+                    $0.category.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    )
                 }
-                .filter { !$0.isEmpty }
+                .filter {
+                    !$0.isEmpty
+                }
         )
 
-        availableCategories = ["الكل"] + categories.sorted()
+        availableCategories =
+            ["الكل"] + categories.sorted()
 
-        let sourcesInData = Set(
-            apps.map(\.sourceName)
-        )
-
-        let preferred = [
-            "لوحة التحكم",
-            "iQ",
-            "FastSign",
-            "NabzClan"
-        ]
-
-        availableSources = ["الكل"] + preferred.filter {
-            sourcesInData.contains($0)
-        }
+        // المصدر الوحيد.
+        availableSources =
+            ["لوحة التحكم"]
     }
 
     private static func uniqueKey(
         for app: StoreApp
     ) -> String {
-        let bundle = app.bundleId
-            .trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
-            .lowercased()
+        let bundle =
+            app.bundleId
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+                .lowercased()
 
         if !bundle.isEmpty {
             return "bundle:\(bundle)"
         }
 
-        return "ipa:\(app.ipaURL.lowercased())"
-    }
-
-    // MARK: - قراءة القيم
-
-    private static func firstString(
-        _ dictionary: [String: Any],
-        keys: [String]
-    ) -> String {
-        for key in keys {
-            if let value = dictionary[key] as? String {
-                let cleaned = value.trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                )
-
-                if !cleaned.isEmpty {
-                    return cleaned
-                }
-            }
-
-            if let value = dictionary[key] as? NSNumber {
-                return value.stringValue
-            }
-        }
-
-        return ""
-    }
-
-    private static func firstSize(
-        _ dictionary: [String: Any],
-        keys: [String]
-    ) -> Double? {
-        for key in keys {
-            if let value = dictionary[key] as? NSNumber {
-                return value.doubleValue
-            }
-
-            if let value = dictionary[key] as? String {
-                let cleaned = value
-                    .trimmingCharacters(
-                        in: .whitespacesAndNewlines
-                    )
-                    .replacingOccurrences(
-                        of: ",",
-                        with: "."
-                    )
-
-                if let direct = Double(cleaned) {
-                    return direct
-                }
-
-                let parts = cleaned
-                    .split(separator: " ")
-                    .map(String.init)
-
-                if let number = parts.first.flatMap(Double.init),
-                   let unit = parts.dropFirst().first?.lowercased() {
-                    switch unit {
-                    case "gb", "gib":
-                        return number * 1024
-                    case "mb", "mib":
-                        return number
-                    case "kb", "kib":
-                        return number / 1024
-                    case "b", "bytes", "byte":
-                        return number / 1_048_576.0
-                    default:
-                        break
-                    }
-                }
-            }
-        }
-
-        return nil
-    }
-
-    private static func firstBool(
-        _ dictionary: [String: Any],
-        keys: [String]
-    ) -> Bool {
-        for key in keys {
-            if let value = dictionary[key] as? Bool {
-                return value
-            }
-
-            if let value = dictionary[key] as? NSNumber {
-                return value.boolValue
-            }
-
-            if let value = dictionary[key] as? String {
-                let lower = value.lowercased()
-                return lower == "true" || value == "1"
-            }
-        }
-
-        return false
-    }
-
-    private static func stableID(
-        name: String,
-        ipaURL: String
-    ) -> String {
-        let raw = "\(name)|\(ipaURL)"
-        var hash: UInt64 = 1469598103934665603
-
-        for byte in raw.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 1099511628211
-        }
-
-        return String(
-            format: "%016llx",
-            hash
-        )
+        return
+            "ipa:\(app.ipaURL.lowercased())"
     }
 }
 
@@ -1748,11 +1581,17 @@ final class BackgroundExecutionToken {
     let id: UIBackgroundTaskIdentifier
 
     init(name: String) {
-        id = UIApplication.shared.beginBackgroundTask(withName: name) { }
+        id =
+            UIApplication.shared.beginBackgroundTask(
+                withName: name
+            ) { }
     }
 
     func end() {
-        guard id != .invalid else { return }
+        guard id != .invalid else {
+            return
+        }
+
         UIApplication.shared.endBackgroundTask(id)
     }
 
@@ -1762,43 +1601,72 @@ final class BackgroundExecutionToken {
 }
 
 enum StoreNotificationManager {
-    private static let center = UNUserNotificationCenter.current()
+    private static let center =
+        UNUserNotificationCenter.current()
 
     static func requestPermission() async {
         _ = try? await center.requestAuthorization(
-            options: [.alert, .sound, .badge]
+            options: [
+                .alert,
+                .sound,
+                .badge
+            ]
         )
     }
 
-    static func postStarted(appName: String, version: String) {
+    static func postStarted(
+        appName: String,
+        version: String
+    ) {
         post(
-            identifier: "iQiraq.install.started.\(safeID(appName))",
+            identifier:
+                "KindaStore.install.started.\(safeID(appName))",
             title: "Xcode",
-            body: "بدأ تنزيل \(appName) \(version.isEmpty ? "" : "— \(version)")"
+            body:
+                "بدأ تنزيل \(appName) \(version.isEmpty ? "" : "— \(version)")"
         )
     }
 
-    static func postProgress(appName: String, progress: Double) {
-        let percent = min(100, max(0, Int(progress * 100)))
+    static func postProgress(
+        appName: String,
+        progress: Double
+    ) {
+        let percent =
+            min(
+                100,
+                max(
+                    0,
+                    Int(progress * 100)
+                )
+            )
 
-        guard percent > 0, percent % 10 == 0 else {
+        guard percent > 0,
+              percent % 10 == 0
+        else {
             return
         }
 
         post(
-            identifier: "iQiraq.install.progress.\(safeID(appName))",
+            identifier:
+                "KindaStore.install.progress.\(safeID(appName))",
             title: "Xcode",
-            body: "تنزيل \(appName): \(percent)%"
+            body:
+                "تنزيل \(appName): \(percent)%"
         )
     }
 
-    static func postFinished(appName: String, success: Bool) {
+    static func postFinished(
+        appName: String,
+        success: Bool
+    ) {
         post(
-            identifier: "iQiraq.install.finished.\(safeID(appName))",
+            identifier:
+                "KindaStore.install.finished.\(safeID(appName))",
             title: "Xcode",
-            body: success
-                ? "اكتمل تنزيل \(appName) وسيتم فتح المكتبة."
-                : "فشل تنزيل \(appName)."
+            body:
+                success
+                    ? "اكتمل تنزيل \(appName) وسيتم فتح المكتبة."
+                    : "فشل تنزيل \(appName)."
         )
     }
 
@@ -1807,34 +1675,46 @@ enum StoreNotificationManager {
         title: String,
         body: String
     ) {
-        let content = UNMutableNotificationContent()
+        let content =
+            UNMutableNotificationContent()
+
         content.title = title
         content.body = body
         content.sound = .default
 
-        let request = UNNotificationRequest(
-            identifier: identifier,
-            content: content,
-            trigger: nil
-        )
+        let request =
+            UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: nil
+            )
 
         center.add(request)
     }
 
-    private static func safeID(_ value: String) -> String {
+    private static func safeID(
+        _ value: String
+    ) -> String {
         value
-            .replacingOccurrences(of: " ", with: "_")
-            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(
+                of: " ",
+                with: "_"
+            )
+            .replacingOccurrences(
+                of: "/",
+                with: "_"
+            )
     }
 }
-
 
 struct StoreIconView: View {
     let urlString: String
     let size: CGFloat
 
     var body: some View {
-        AsyncImage(url: URL(string: urlString)) { phase in
+        AsyncImage(
+            url: URL(string: urlString)
+        ) { phase in
             switch phase {
             case .success(let image):
                 image
@@ -1851,7 +1731,10 @@ struct StoreIconView: View {
                 placeholder
             }
         }
-        .frame(width: size, height: size)
+        .frame(
+            width: size,
+            height: size
+        )
         .clipShape(
             RoundedRectangle(
                 cornerRadius: size / 4.5,
@@ -1866,10 +1749,17 @@ struct StoreIconView: View {
             cornerRadius: size / 4.5,
             style: .continuous
         )
-        .fill(Color.secondary.opacity(0.15))
+        .fill(
+            Color.secondary.opacity(0.15)
+        )
         .overlay {
             Image(systemName: "app.dashed")
-                .font(.system(size: size / 3, weight: .light))
+                .font(
+                    .system(
+                        size: size / 3,
+                        weight: .light
+                    )
+                )
                 .foregroundStyle(.secondary)
         }
     }
