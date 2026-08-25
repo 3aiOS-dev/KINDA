@@ -9,13 +9,11 @@ enum TabEnum: String, CaseIterable, Hashable {
     var title: String {
         switch self {
         case .home:
-            return .localized("الرئيسية")
-
+            return "الرئيسية"
         case .library:
-            return .localized("Library")
-
+            return "توقيع"
         case .settings:
-            return .localized("Settings")
+            return "الإعدادات"
         }
     }
 
@@ -23,10 +21,8 @@ enum TabEnum: String, CaseIterable, Hashable {
         switch self {
         case .home:
             return "house.fill"
-
         case .library:
-            return "square.grid.2x2"
-
+            return "signature"
         case .settings:
             return "gearshape.2"
         }
@@ -37,10 +33,8 @@ enum TabEnum: String, CaseIterable, Hashable {
         switch tab {
         case .home:
             HomeView()
-
         case .library:
             LibraryView()
-
         case .settings:
             SettingsView()
         }
@@ -54,6 +48,7 @@ enum TabEnum: String, CaseIterable, Hashable {
         ]
     }
 
+    // يمنع ظهور "المزيد" أو تبويبات إضافية في iOS 18.
     static var customizableTabs: [TabEnum] {
         []
     }
