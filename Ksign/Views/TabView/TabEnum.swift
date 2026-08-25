@@ -2,39 +2,33 @@ import SwiftUI
 import NimbleViews
 
 enum TabEnum: String, CaseIterable, Hashable {
-    case home // تم التغيير هنا من files إلى home
-    case sources
+    case home
     case library
     case settings
-    case certificates
 
     var title: String {
         switch self {
         case .home:
-            return .localized("الرئيسية") // يمكنك جعلها "Home" إذا كان التطبيق بالإنجليزية
-        case .sources:
-            return .localized("Sources")
+            return .localized("الرئيسية")
+
         case .library:
             return .localized("Library")
+
         case .settings:
             return .localized("Settings")
-        case .certificates:
-            return .localized("Certificates")
         }
     }
 
     var icon: String {
         switch self {
         case .home:
-            return "house.fill" // تم تغيير الأيقونة لتناسب الرئيسية
-        case .sources:
-            return "globe.desk"
+            return "house.fill"
+
         case .library:
             return "square.grid.2x2"
+
         case .settings:
             return "gearshape.2"
-        case .certificates:
-            return "person.text.rectangle"
         }
     }
 
@@ -42,35 +36,25 @@ enum TabEnum: String, CaseIterable, Hashable {
     static func view(for tab: TabEnum) -> some View {
         switch tab {
         case .home:
-            HomeView() // توجيه التبويب إلى الشاشة الجديدة
-
-        case .sources:
-            SourcesView()
+            HomeView()
 
         case .library:
             LibraryView()
 
         case .settings:
             SettingsView()
-
-        case .certificates:
-            NBNavigationView(.localized("Certificates")) {
-                CertificatesView()
-            }
         }
     }
 
     static var defaultTabs: [TabEnum] {
         [
-            .home, // تم التحديث هنا
+            .home,
             .library,
             .settings
         ]
     }
 
     static var customizableTabs: [TabEnum] {
-        [
-            .certificates
-        ]
+        []
     }
 }
