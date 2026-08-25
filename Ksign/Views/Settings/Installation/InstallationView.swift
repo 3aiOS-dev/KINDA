@@ -1,57 +1,71 @@
 //
 //  InstallationView.swift
-//  Feather
+//  KINDA
 //
-//  Created by samara on 3.06.2025.
+//  Installation is intentionally limited to Semi Local.
 //
 
 import SwiftUI
 import NimbleViews
 
-// MARK: - View
 struct InstallationView: View {
-    @AppStorage("Feather.installationMethod") private var _installationMethod: Int = 0
-    @State private var _showMethodChangedAlert = false
+    // 1 = Semi Local in the original project.
+    @AppStorage("Feather.serverMethod")
+    private var _serverMethod: Int = 1
 
-    private let _installationMethods: [String] = [
-        .localized("Server"),
-        .localized("idevice")
-    ]
-    
-    // MARK: Body
     var body: some View {
-        NBList(.localized("Installation")) {
-            Section {
-                Picker(.localized("Installation Type"), systemImage: "arrow.down.app", selection: $_installationMethod) {
-                    ForEach(_installationMethods.indices, id: \.description) { index in
-                        Text(_installationMethods[index]).tag(index)
+        ZStack {
+            KindaTheme.pageBG
+                .ignoresSafeArea()
+
+            KindaGridBackground()
+
+            NBList(.localized("Installation")) {
+                Section {
+                    HStack(spacing: 12) {
+                        Image(systemName: "server.rack")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Color.primary.opacity(0.08),
+                                in: RoundedRectangle(
+                                    cornerRadius: 10,
+                                    style: .continuous
+                                )
+                            )
+
+                        VStack(
+                            alignment: .leading,
+                            spacing: 3
+                        ) {
+                            Text("نوع التثبيت")
+                                .font(.system(size: 15, weight: .semibold))
+
+                            Text("محلي جزئياً")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(.primary)
                     }
+                } footer: {
+                    Text(
+                        "يستخدم التثبيت المحلي جزئياً لتثبيت التطبيقات من خلال الخادم المحلي مع إبقاء المسار متوافقاً مع نظام التثبيت الحالي."
+                    )
                 }
-            } footer: {
-                Text("Server (Recommended):\nUses a locally hosted server and itms-services:// to install applications.\n\nIDevice (advanced):\nUses a VPN and a pairing file. Writes to AFC and manually calls installd, while monitoring install progress by using a callback\nAdvantage: It is very reliable, does not need SSL certificates or a externally hosted server. Rather, works similarly to a computer.")
-            }
-            
-            if _installationMethod == 0 {
+
                 ServerView()
-            } else if _installationMethod == 1 {
-                TunnelView()
             }
+            .scrollContentBackground(.hidden)
         }
-        .onChange(of: _installationMethod) { newValue in
-            guard newValue == 1 else { return }
-            _showMethodChangedAlert = true
+        .onAppear {
+            // Force Semi Local every time the page opens.
+            _serverMethod = 1
         }
-        .alert(.localized("Advanced Installation Method"), isPresented: $_showMethodChangedAlert) {
-            Button(.localized("Switch Back"), role: .destructive) {
-                _installationMethod = 0
-            }
-            Button(.localized("OK"), role: .cancel) {}
-        } message: {
-            Text(.localized("idevice warning"))
-        }
-
-
-        .animation(.default, value: _installationMethod)
     }
 }
-
