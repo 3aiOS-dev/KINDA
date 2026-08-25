@@ -1,16 +1,14 @@
 //
 //  SettingsView.swift
-//  Feather
-//
-//  Created by samara on 10.04.2025.
+//  KINDA
 //
 
 import SwiftUI
 import NimbleViews
 
-// MARK: - واجهة الإعدادات
 struct SettingsView: View {
-    @AppStorage("feather.selectedCert") private var _storedSelectedCert: Int = 0
+    @AppStorage("feather.selectedCert")
+    private var _storedSelectedCert: Int = 0
 
     @FetchRequest(
         entity: CertificatePair.entity(),
@@ -22,10 +20,11 @@ struct SettingsView: View {
         ],
         animation: .snappy
     )
-    private var _certificates: FetchedResults<CertificatePair>
+    private var _certificates:
+        FetchedResults<CertificatePair>
 
-    // الشهادة المحددة حالياً
-    private var selectedCertificate: CertificatePair? {
+    private var selectedCertificate:
+        CertificatePair? {
         guard
             _storedSelectedCert >= 0,
             _storedSelectedCert < _certificates.count
@@ -33,166 +32,203 @@ struct SettingsView: View {
             return nil
         }
 
-        return _certificates[_storedSelectedCert]
+        return _certificates[
+            _storedSelectedCert
+        ]
     }
 
-    // MARK: - المحتوى
     var body: some View {
-        NBNavigationView(.localized("Settings")) {
-            Form {
+        ZStack {
+            KindaTheme.pageBG
+                .ignoresSafeArea()
 
-                // MARK: معلومات التطبيق
-                _feedback()
+            KindaGridBackground()
 
-                // MARK: الشهادات
-                NBSection(.localized("Certificates")) {
-
-                    if let cert = selectedCertificate {
-                        CertificatesCellView(cert: cert)
-                    } else {
-                        Text(.localized("No Certificate"))
-                            .font(.footnote)
-                            .foregroundColor(.disabled())
-                    }
-
-                    NavigationLink(
-                        destination: CertificatesView()
-                    ) {
-                        Label(
-                            .localized("Certificates"),
-                            systemImage: "signature"
-                        )
-                    }
-
-                } footer: {
-                    Text(
-                        .localized(
-                            "Add and manage certificates used for signing applications."
-                        )
-                    )
-                }
-
-                // MARK: الميزات
-                NBSection(.localized("Features")) {
-
-                    NavigationLink(
-                        destination: LogsView(
-                            manager: LogsManager.shared
-                        )
-                    ) {
-                        Label(
-                            .localized("Logs"),
-                            systemImage: "apple.terminal"
-                        )
-                    }
-
-                    NavigationLink(
-                        destination: AppFeaturesView()
-                    ) {
-                        Label(
-                            .localized("App Features"),
-                            systemImage: "sparkles"
-                        )
-                    }
-
-                    NavigationLink(
-                        destination: ConfigurationView()
-                    ) {
-                        Label(
-                            .localized("Signing Options"),
-                            systemImage: "gear"
-                        )
-                    }
-
-                    NavigationLink(
-                        destination: ArchiveView()
-                    ) {
-                        Label(
-                            .localized("Archive & Extraction"),
-                            systemImage: "archivebox"
-                        )
-                    }
-
-                    NavigationLink(
-                        destination: InstallationView()
-                    ) {
-                        Label(
-                            .localized("Installation"),
-                            systemImage: "server.rack"
-                        )
-                    }
-                }
-
-                // MARK: المجلدات
-                _directories()
-
-                // MARK: إعادة التعيين
-                Section {
-                    NavigationLink(
-                        destination: ResetView()
-                    ) {
-                        Label(
-                            .localized("Reset"),
-                            systemImage: "trash"
-                        )
-                    }
-                } footer: {
-                    Text(
-                        .localized(
-                            "Reset the applications sources, certificates, apps, and general contents."
-                        )
-                    )
-                }
-            }
-        }
-    }
-}
-
-// MARK: - وظائف الإعدادات
-extension SettingsView {
-
-    // MARK: معلومات التطبيق
-    @ViewBuilder
-    private func _feedback() -> some View {
-        Section {
-
-            // حول التطبيق
-            NavigationLink(
-                destination: AboutNyaView()
+            NBNavigationView(
+                .localized("Settings")
             ) {
-                Label(
-                    .localized("About"),
-                    systemImage: "info.circle"
+                Form {
+                    _feedback()
+
+                    NBSection(
+                        .localized("Certificates")
+                    ) {
+                        if let cert =
+                            selectedCertificate
+                        {
+                            CertificatesCellView(
+                                cert: cert
+                            )
+                        } else {
+                            Text(
+                                .localized(
+                                    "No Certificate"
+                                )
+                            )
+                            .font(.footnote)
+                            .foregroundColor(
+                                .secondary
+                            )
+                        }
+
+                        NavigationLink(
+                            destination:
+                                CertificatesView()
+                        ) {
+                            Label(
+                                .localized(
+                                    "Certificates"
+                                ),
+                                systemImage:
+                                    "signature"
+                            )
+                        }
+                    } footer: {
+                        Text(
+                            .localized(
+                                "Add and manage certificates used for signing applications."
+                            )
+                        )
+                    }
+
+                    NBSection(
+                        .localized("Features")
+                    ) {
+                        NavigationLink(
+                            destination:
+                                LogsView(
+                                    manager:
+                                        LogsManager.shared
+                                )
+                        ) {
+                            Label(
+                                .localized("Logs"),
+                                systemImage:
+                                    "apple.terminal"
+                            )
+                        }
+
+                        NavigationLink(
+                            destination:
+                                AppFeaturesView()
+                        ) {
+                            Label(
+                                .localized(
+                                    "App Features"
+                                ),
+                                systemImage:
+                                    "sparkles"
+                            )
+                        }
+
+                        NavigationLink(
+                            destination:
+                                ConfigurationView()
+                        ) {
+                            Label(
+                                .localized(
+                                    "Signing Options"
+                                ),
+                                systemImage:
+                                    "gear"
+                            )
+                        }
+
+                        NavigationLink(
+                            destination:
+                                ArchiveView()
+                        ) {
+                            Label(
+                                .localized(
+                                    "Archive & Extraction"
+                                ),
+                                systemImage:
+                                    "archivebox"
+                            )
+                        }
+
+                        NavigationLink(
+                            destination:
+                                InstallationView()
+                        ) {
+                            Label(
+                                .localized(
+                                    "Installation"
+                                ),
+                                systemImage:
+                                    "server.rack"
+                            )
+                        }
+                    }
+
+                    _directories()
+
+                    Section {
+                        NavigationLink(
+                            destination:
+                                ResetView()
+                        ) {
+                            Label(
+                                .localized("Reset"),
+                                systemImage:
+                                    "trash"
+                            )
+                        }
+                    } footer: {
+                        Text(
+                            .localized(
+                                "Reset the applications sources, certificates, apps, and general contents."
+                            )
+                        )
+                    }
+                }
+                .scrollContentBackground(
+                    .hidden
                 )
             }
         }
     }
 
-    // MARK: المجلدات
+    @ViewBuilder
+    private func _feedback() -> some View {
+        Section {
+            NavigationLink(
+                destination:
+                    AboutNyaView()
+            ) {
+                Label(
+                    .localized("About"),
+                    systemImage:
+                        "info.circle"
+                )
+            }
+        }
+    }
+
     @ViewBuilder
     private func _directories() -> some View {
-        NBSection(.localized("Misc")) {
-
-            // فتح مجلد المستندات
+        NBSection(
+            .localized("Misc")
+        ) {
             Button(
                 .localized("Open Documents"),
                 systemImage: "folder"
             ) {
                 UIApplication.open(
-                    URL.documentsDirectory.toSharedDocumentsURL()!
+                    URL.documentsDirectory
+                        .toSharedDocumentsURL()!
                 )
             }
 
-            // فتح مجلد الأرشيفات
             Button(
                 .localized("Open Archives"),
                 systemImage: "folder"
             ) {
                 UIApplication.open(
-                    FileManager.default.archives.toSharedDocumentsURL()!
+                    FileManager.default.archives
+                        .toSharedDocumentsURL()!
                 )
             }
-
         } footer: {
             Text(
                 .localized(
