@@ -1,17 +1,22 @@
+//
+// TabEnum.swift
+// KINDA
+//
+// النسخة الجديدة: لا يوجد تبويب "توقيع".
+// التبويبات الظاهرة فقط: الرئيسية + الإعدادات.
+//
+
 import SwiftUI
 import NimbleViews
 
 enum TabEnum: String, CaseIterable, Hashable {
     case home
-    case library
     case settings
 
     var title: String {
         switch self {
         case .home:
             return "الرئيسية"
-        case .library:
-            return "توقيع"
         case .settings:
             return "الإعدادات"
         }
@@ -21,34 +26,32 @@ enum TabEnum: String, CaseIterable, Hashable {
         switch self {
         case .home:
             return "house.fill"
-        case .library:
-            return "signature"
         case .settings:
             return "gearshape.2"
         }
     }
 
     @ViewBuilder
+    @MainActor
     static func view(for tab: TabEnum) -> some View {
         switch tab {
         case .home:
             HomeView()
-        case .library:
-            LibraryView()
+
         case .settings:
             SettingsView()
         }
     }
 
+    // التبويبات الأساسية فقط.
     static var defaultTabs: [TabEnum] {
         [
             .home,
-            .library,
             .settings
         ]
     }
 
-    // يمنع ظهور "المزيد" أو تبويبات إضافية في iOS 18.
+    // لا توجد أي تبويبات إضافية أو "المزيد".
     static var customizableTabs: [TabEnum] {
         []
     }
