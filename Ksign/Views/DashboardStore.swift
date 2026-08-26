@@ -2,9 +2,6 @@
 // DashboardStore.swift
 // KINDA
 //
-// نوع البيانات ومدير تطبيقات لوحة التحكم.
-// لا يستخدم أي مصادر خارجية.
-//
 
 import Foundation
 import SwiftUI
@@ -19,19 +16,10 @@ struct StoreApp: Identifiable, Codable, Hashable {
     let category: String
 
     enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case title
-        case version
-        case bundleIdentifier
-        case bundleID
-        case identifier
-        case iconURL
-        case icon
-        case ipaURL
-        case ipa
-        case downloadURL
-        case download
+        case id, name, title, version
+        case bundleIdentifier, bundleID, identifier
+        case iconURL, icon
+        case ipaURL, ipa, downloadURL, download
         case category
     }
 
@@ -54,51 +42,50 @@ struct StoreApp: Identifiable, Codable, Hashable {
     }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let c = try decoder.container(keyedBy: CodingKeys.self)
 
         func string(_ keys: CodingKeys...) -> String {
             for key in keys {
-                if let value = try? container.decode(String.self, forKey: key),
-                   !value.isEmpty {
+                if let value = try? c.decode(String.self, forKey: key),
+                   !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     return value
+                }
+                if let value = try? c.decode(URL.self, forKey: key) {
+                    return value.absoluteString
                 }
             }
             return ""
         }
 
-        let decodedID = string(.id)
-        let decodedName = string(.name, .title)
-        let decodedVersion = string(.version)
-        let decodedBundle = string(.bundleIdentifier, .bundleID, .identifier)
-        let decodedIcon = string(.iconURL, .icon)
-        let decodedIPA = string(.ipaURL, .ipa, .downloadURL, .download)
-        let decodedCategory = string(.category)
+        let rawID = string(.id)
+        let rawName = string(.name, .title)
+        let rawVersion = string(.version)
+        let rawBundle = string(.bundleIdentifier, .bundleID, .identifier)
+        let rawIcon = string(.iconURL, .icon)
+        let rawIPA = string(.ipaURL, .ipa, .downloadURL, .download)
+        let rawCategory = string(.category)
 
-        id = decodedID.isEmpty
-            ? (decodedBundle.isEmpty ? decodedName : decodedBundle)
-            : decodedID
+        id = rawID.isEmpty
+            ? (rawBundle.isEmpty ? (rawName.isEmpty ? UUID().uuidString : rawName) : rawBundle)
+            : rawID
 
-        name = decodedName.isEmpty ? "تطبيق" : decodedName
-        version = decodedVersion
-        bundleIdentifier = decodedBundle
-        iconURL = decodedIcon
-        ipaURL = decodedIPA
-        category = decodedCategory
+        name = rawName.isEmpty ? "تطبيق" : rawName
+        version = rawVersion
+        bundleIdentifier = rawBundle
+        iconURL = rawIcon
+        ipaURL = rawIPA
+        category = rawCategory
     }
 
-    // Xcode 26 / Swift 6:
-    // CodingKeys تحتوي على مفاتيح بديلة للفك، لذلك يتم تعريف Encodable
-    // بشكل صريح حتى لا يعتمد البناء على synthesis التلقائي.
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-
-        try container.encode(id, forKey: .id)
-        try container.encode(name, forKey: .name)
-        try container.encode(version, forKey: .version)
-        try container.encode(bundleIdentifier, forKey: .bundleIdentifier)
-        try container.encode(iconURL, forKey: .iconURL)
-        try container.encode(ipaURL, forKey: .ipaURL)
-        try container.encode(category, forKey: .category)
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(version, forKey: .version)
+        try c.encode(bundleIdentifier, forKey: .bundleIdentifier)
+        try c.encode(iconURL, forKey: .iconURL)
+        try c.encode(ipaURL, forKey: .ipaURL)
+        try c.encode(category, forKey: .category)
     }
 }
 
@@ -106,13 +93,15 @@ struct StoreApp: Identifiable, Codable, Hashable {
 final class KindaStoreManager: ObservableObject {
     static let shared = KindaStoreManager()
 
-    // Endpoint الخاص بلوحة التحكم فقط.
-    // غيّره إذا كان endpoint JSON الفعلي للوحة التحكم مختلفاً.
-    private let controlPanelAppsURL = "https://portal.kinda.app/api/apps"
+    private var controlPanelAppsURL: String {
+        UserDefaults.standard.string(forKey: "kinda.controlPanelAppsURL")
+            ?? "https://portal.kinda.app/api/apps"
+    }
 
     @Published private(set) var apps: [StoreApp] = []
     @Published private(set) var categories: [String] = []
     @Published private(set) var isLoading = false
+    @Published private(set) var lastError: String?
     @Published private(set) var hasMorePages = false
 
     private var currentPage = 1
@@ -122,177 +111,170 @@ final class KindaStoreManager: ObservableObject {
 
     func reload() async {
         currentPage = 1
-        apps.removeAll()
-        categories.removeAll()
+        lastError = nil
         hasMorePages = false
-
-        await loadPage(1, replacing: true)
+        await load(page: 1, replace: true)
     }
 
     func loadNextPage() async {
-        guard !isLoading, hasMorePages else {
-            return
-        }
-
-        await loadPage(currentPage + 1, replacing: false)
+        guard !isLoading, hasMorePages else { return }
+        await load(page: currentPage + 1, replace: false)
     }
 
-    private func loadPage(_ page: Int, replacing: Bool) async {
-        guard let base = URL(string: controlPanelAppsURL) else {
+    private func load(page: Int, replace: Bool) async {
+        guard let base = URL(string: controlPanelAppsURL),
+              let scheme = base.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else {
+            lastError = "رابط لوحة التحكم غير صالح."
             return
         }
 
         isLoading = true
         defer { isLoading = false }
 
-        var components = URLComponents(
-            url: base,
-            resolvingAgainstBaseURL: false
-        )
-
+        var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
         var query = components?.queryItems ?? []
 
-        query.append(
-            URLQueryItem(
-                name: "page",
-                value: String(page)
-            )
-        )
+        query.removeAll {
+            $0.name == "page" || $0.name == "limit" || $0.name == "per_page"
+        }
 
-        query.append(
-            URLQueryItem(
-                name: "limit",
-                value: String(pageSize)
-            )
-        )
-
+        query.append(URLQueryItem(name: "page", value: String(page)))
+        query.append(URLQueryItem(name: "limit", value: String(pageSize)))
         components?.queryItems = query
 
         guard let url = components?.url else {
+            lastError = "تعذر إنشاء رابط الطلب."
             return
         }
 
         do {
             var request = URLRequest(url: url)
+            request.httpMethod = "GET"
             request.timeoutInterval = 30
             request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.setValue(
-                "application/json",
-                forHTTPHeaderField: "Accept"
-            )
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-            let (data, response) = try await URLSession.shared.data(
-                for: request
-            )
+            let (data, response) = try await URLSession.shared.data(for: request)
 
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else {
-                return
+            guard let http = response as? HTTPURLResponse else {
+                throw StoreError.invalidResponse
             }
 
-            let result = try decodeApps(from: data)
+            guard (200...299).contains(http.statusCode) else {
+                throw StoreError.http(http.statusCode)
+            }
 
-            if replacing {
+            let result = try decode(data)
+
+            if replace {
                 apps = result.apps
             } else {
-                let existing = Set(apps.map(\.id))
-
-                apps.append(
-                    contentsOf: result.apps.filter {
-                        !existing.contains($0.id)
-                    }
-                )
+                var ids = Set(apps.map(\.id))
+                for app in result.apps where !ids.contains(app.id) {
+                    apps.append(app)
+                    ids.insert(app.id)
+                }
             }
 
             currentPage = page
             hasMorePages = result.hasMore || result.apps.count >= pageSize
-
             updateCategories()
+            lastError = apps.isEmpty ? "لم تُرجع لوحة التحكم أي تطبيقات." : nil
         } catch {
-            print("Dashboard apps error:", error)
+            lastError = error.localizedDescription
+            print("KINDA dashboard error:", error)
         }
     }
 
     private func updateCategories() {
         categories = Array(
-            Set(
-                apps
-                    .map(\.category)
-                    .filter { !$0.isEmpty }
-            )
+            Set(apps.map(\.category).filter { !$0.isEmpty })
         ).sorted()
     }
 
-    private struct AppsEnvelope: Decodable {
+    private struct Envelope: Decodable {
         let apps: [StoreApp]
         let hasMore: Bool
 
         init(from decoder: Decoder) throws {
-            let container = try decoder.container(
-                keyedBy: DynamicCodingKeys.self
-            )
+            let c = try decoder.container(keyedBy: DynamicKey.self)
 
-            var decodedApps: [StoreApp] = []
+            var result: [StoreApp] = []
 
-            for key in ["apps", "data", "items", "results"] {
-                guard let codingKey = DynamicCodingKeys(
-                    stringValue: key
-                ) else {
-                    continue
+            for key in ["apps", "items", "results", "data", "applications"] {
+                guard let k = DynamicKey(stringValue: key) else { continue }
+
+                if let value = try? c.decode([StoreApp].self, forKey: k) {
+                    result = value
+                    break
                 }
 
-                if let value = try? container.decode(
-                    [StoreApp].self,
-                    forKey: codingKey
-                ) {
-                    decodedApps = value
+                if let object = try? c.decode(ObjectEnvelope.self, forKey: k) {
+                    result = object.apps
                     break
                 }
             }
 
-            apps = decodedApps
+            apps = result
 
-            let hasMoreKey = DynamicCodingKeys(
-                stringValue: "hasMore"
-            )!
-
-            hasMore = (
-                try? container.decode(
-                    Bool.self,
-                    forKey: hasMoreKey
-                )
-            ) ?? false
+            let moreKey = DynamicKey(stringValue: "hasMore")!
+            if let value = try? c.decode(Bool.self, forKey: moreKey) {
+                hasMore = value
+            } else if let value = try? c.decode(String.self, forKey: moreKey) {
+                hasMore = ["true", "1", "yes"].contains(value.lowercased())
+            } else {
+                hasMore = false
+            }
         }
     }
 
-    private func decodeApps(
-        from data: Data
-    ) throws -> (
-        apps: [StoreApp],
-        hasMore: Bool
-    ) {
+    private struct ObjectEnvelope: Decodable {
+        let apps: [StoreApp]
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: DynamicKey.self)
+            var result: [StoreApp] = []
+
+            for key in ["apps", "items", "results", "data", "applications"] {
+                guard let k = DynamicKey(stringValue: key) else { continue }
+                if let value = try? c.decode([StoreApp].self, forKey: k) {
+                    result = value
+                    break
+                }
+            }
+
+            apps = result
+        }
+    }
+
+    private func decode(_ data: Data) throws -> (apps: [StoreApp], hasMore: Bool) {
         let decoder = JSONDecoder()
 
-        if let direct = try? decoder.decode(
-            [StoreApp].self,
-            from: data
-        ) {
+        if let direct = try? decoder.decode([StoreApp].self, from: data) {
             return (direct, false)
         }
 
-        let envelope = try decoder.decode(
-            AppsEnvelope.self,
-            from: data
-        )
+        let envelope = try decoder.decode(Envelope.self, from: data)
+        return (envelope.apps, envelope.hasMore)
+    }
 
-        return (
-            envelope.apps,
-            envelope.hasMore
-        )
+    private enum StoreError: LocalizedError {
+        case invalidResponse
+        case http(Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidResponse:
+                return "استجابة لوحة التحكم غير صالحة."
+            case .http(let code):
+                return "لوحة التحكم أعادت HTTP \(code)."
+            }
+        }
     }
 }
 
-private struct DynamicCodingKeys: CodingKey {
+private struct DynamicKey: CodingKey {
     var stringValue: String
     var intValue: Int?
 
@@ -317,10 +299,7 @@ struct DashboardIconView: View {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-
+                        image.resizable().scaledToFill()
                     default:
                         placeholder
                     }
@@ -329,30 +308,15 @@ struct DashboardIconView: View {
                 placeholder
             }
         }
-        .frame(
-            width: 50,
-            height: 50
-        )
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 12,
-                style: .continuous
-            )
-        )
+        .frame(width: 50, height: 50)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var placeholder: some View {
         Image(systemName: "app.fill")
-            .font(
-                .system(size: 24)
-            )
+            .font(.system(size: 24))
             .foregroundStyle(.secondary)
-            .frame(
-                maxWidth: .infinity,
-                maxHeight: .infinity
-            )
-            .background(
-                Color.secondary.opacity(0.10)
-            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.secondary.opacity(0.10))
     }
 }
