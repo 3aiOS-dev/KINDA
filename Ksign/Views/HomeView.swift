@@ -137,7 +137,7 @@ struct HomeView: View {
     }
 
     private var titleHeader: some View {
-        Text("الرئيسية")
+        Text("Ø§ÙØ±Ø¦ÙØ³ÙØ©")
             .font(.system(size: 19, weight: .semibold))
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, alignment: .center)
@@ -164,7 +164,7 @@ struct HomeView: View {
                 }
                 .overlay(alignment: .trailing) {
                     if searchText.isEmpty {
-                        Text("ألعاب وتطبيقات والمزيد")
+                        Text("Ø£ÙØ¹Ø§Ø¨ ÙØªØ·Ø¨ÙÙØ§Øª ÙØ§ÙÙØ²ÙØ¯")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.secondary.opacity(0.65))
                             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -210,37 +210,18 @@ struct HomeView: View {
                 .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            Text(storeManager.errorMessage ?? (searchText.isEmpty ? "لا توجد تطبيقات بعد" : "لا توجد نتائج"))
+            Text(searchText.isEmpty ? "ÙØ§ ØªÙØ¬Ø¯ ØªØ·Ø¨ÙÙØ§Øª Ø¨Ø¹Ø¯" : "ÙØ§ ØªÙØ¬Ø¯ ÙØªØ§Ø¦Ø¬")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(.primary)
 
             Text(
-                storeManager.errorMessage == nil
-                    ? (searchText.isEmpty
-                        ? "أضف تطبيقاً من لوحة التحكم ليظهر هنا مباشرة."
-                        : "جرّب البحث باسم التطبيق أو Bundle ID.")
-                    : "تحقق من اتصال لوحة التحكم وصلاحيات Supabase ثم اضغط إعادة المحاولة."
+                searchText.isEmpty
+                    ? "Ø£Ø¶Ù ØªØ·Ø¨ÙÙØ§Ù ÙÙ ÙÙØ­Ø© Ø§ÙØªØ­ÙÙ ÙÙØ¸ÙØ± ÙÙØ§ ÙØ¨Ø§Ø´Ø±Ø©."
+                    : "Ø¬Ø±ÙØ¨ Ø§ÙØ¨Ø­Ø« Ø¨Ø§Ø³Ù Ø§ÙØªØ·Ø¨ÙÙ Ø£Ù Bundle ID."
             )
             .font(.system(size: 11, weight: .regular, design: .monospaced))
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
-
-            if storeManager.errorMessage != nil || storeManager.apps.isEmpty {
-                Button {
-                    Task { await storeManager.load() }
-                } label: {
-                    HStack(spacing: 6) {
-                        if storeManager.isLoading { ProgressView().controlSize(.small) }
-                        Text(storeManager.isLoading ? "جاري المحاولة..." : "إعادة المحاولة")
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .padding(.horizontal, 14)
-                    .frame(height: 34)
-                    .background(Color.secondary.opacity(0.12), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(storeManager.isLoading)
-            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
@@ -309,7 +290,7 @@ struct HomeView: View {
                     }
                 }
 
-                Text(loading ? "\(Int(progress * 100))%" : "تثبيت")
+                Text(loading ? "\(Int(progress * 100))%" : "ØªØ«Ø¨ÙØª")
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                     .monospacedDigit()
@@ -386,14 +367,14 @@ struct HomeView: View {
 
                 HStack(spacing: 12) {
                     pillButton(
-                        title: "تكرار",
+                        title: "ØªÙØ±Ø§Ø±",
                         isLoading: isDownloading(app)
                     ) {
                         repeatDownload(app)
                     }
 
                     pillButton(
-                        title: "تثبيت",
+                        title: "ØªØ«Ø¨ÙØª",
                         isLoading: isDownloading(app)
                     ) {
                         install(app)
@@ -439,8 +420,8 @@ struct HomeView: View {
 
     private func statsRow(_ app: StoreApp) -> some View {
         HStack(spacing: 8) {
-            statBox(title: "حجم التطبيق", value: app.sizeValueText)
-            statBox(title: "الإصدار", value: app.version)
+            statBox(title: "Ø­Ø¬Ù Ø§ÙØªØ·Ø¨ÙÙ", value: app.sizeValueText)
+            statBox(title: "Ø§ÙØ¥ØµØ¯Ø§Ø±", value: app.version)
         }
         .frame(maxWidth: .infinity, alignment: .center)
     }
@@ -486,10 +467,8 @@ struct HomeView: View {
     private func startStoreDownload(for app: StoreApp) {
         guard !isDownloading(app) else { return }
 
-        let rawURL = app.ipaURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let decodedURL = rawURL.removingPercentEncoding ?? rawURL
-
-        guard let url = URL(string: decodedURL),
+        guard
+            let url = URL(string: app.ipaURL.trimmingCharacters(in: .whitespacesAndNewlines)),
             let scheme = url.scheme?.lowercased(),
             scheme == "http" || scheme == "https"
         else {
@@ -682,82 +661,36 @@ struct StoreApp: Identifiable, Decodable, Hashable {
     let sizeMB: Double?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, title, version
-        case bundleId, bundle_id, bundleID, identifier
-        case appDescription, description
+        case id
+        case name
+        case version
+        case bundleId = "bundle_id"
+        case appDescription = "description"
         case category
-        case iconURL, icon_url, icon
-        case ipaURL, ipa_url, ipa, downloadURL, download_url, download
-        case sizeMB, size_mb, size
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-
-        func string(_ keys: CodingKeys...) -> String {
-            for key in keys {
-                if let value = try? c.decode(String.self, forKey: key),
-                   !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return value
-                }
-                if let value = try? c.decode(URL.self, forKey: key) {
-                    return value.absoluteString
-                }
-                if let value = try? c.decode(Int.self, forKey: key) {
-                    return String(value)
-                }
-                if let value = try? c.decode(Double.self, forKey: key) {
-                    return String(value)
-                }
-            }
-            return ""
-        }
-
-        func double(_ keys: CodingKeys...) -> Double? {
-            for key in keys {
-                if let value = try? c.decode(Double.self, forKey: key) { return value }
-                if let value = try? c.decode(Int.self, forKey: key) { return Double(value) }
-                if let value = try? c.decode(String.self, forKey: key),
-                   let parsed = Double(value.replacingOccurrences(of: ",", with: ".")) {
-                    return parsed
-                }
-            }
-            return nil
-        }
-
-        let rawID = string(.id)
-        let rawName = string(.name, .title)
-        let rawBundle = string(.bundleId, .bundle_id, .bundleID, .identifier)
-
-        id = rawID.isEmpty
-            ? (rawBundle.isEmpty ? (rawName.isEmpty ? UUID().uuidString : rawName) : rawBundle)
-            : rawID
-        name = rawName.isEmpty ? "تطبيق" : rawName
-        version = string(.version)
-        bundleId = rawBundle
-        appDescription = string(.appDescription, .description)
-        category = string(.category)
-        iconURL = string(.iconURL, .icon_url, .icon)
-        ipaURL = string(.ipaURL, .ipa_url, .ipa, .downloadURL, .download_url, .download)
-        sizeMB = double(.sizeMB, .size_mb, .size)
+        case iconURL = "icon_url"
+        case ipaURL = "ipa_url"
+        case sizeMB = "size_mb"
     }
 
     var sizeText: String? {
         guard let sizeMB, sizeMB > 0 else { return nil }
-        if sizeMB >= 1024 { return String(format: "%.2f GB", sizeMB / 1024) }
+
+        if sizeMB >= 1024 {
+            return String(format: "%.2f GB", sizeMB / 1024)
+        }
+
         return String(format: "%.0f MB", sizeMB)
     }
 
     var sizeValueText: String {
         guard let sizeMB, sizeMB > 0 else { return "—" }
-        return String(format: "%.1f MB", sizeMB)
+        return String(format: "%.1f", sizeMB)
     }
 
     var shortIdentifier: String {
         bundleId.split(separator: ".").last.map(String.init) ?? bundleId
     }
 }
-
 
 @MainActor
 final class KindaStoreManager: ObservableObject {
@@ -773,105 +706,49 @@ final class KindaStoreManager: ObservableObject {
     private init() {}
 
     func filtered(_ searchText: String) -> [StoreApp] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return apps }
+        guard !searchText.isEmpty else { return apps }
+
         return apps.filter {
-            $0.name.localizedCaseInsensitiveContains(query) ||
-            $0.bundleId.localizedCaseInsensitiveContains(query) ||
-            $0.category.localizedCaseInsensitiveContains(query)
+            $0.name.localizedCaseInsensitiveContains(searchText)
+            || $0.bundleId.localizedCaseInsensitiveContains(searchText)
         }
     }
 
     func load() async {
-        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
 
-        var components = URLComponents(
-            string: "\(baseURL)/rest/v1/store_apps"
-        )
-        components?.queryItems = [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "created_at.desc"),
-            URLQueryItem(name: "limit", value: "1000")
-        ]
+        defer {
+            isLoading = false
+        }
 
-        guard let url = components?.url else {
-            errorMessage = "رابط لوحة التحكم غير صالح."
+        guard let url = URL(
+            string: "\(baseURL)/rest/v1/store_apps?select=*&order=created_at.desc"
+        ) else {
+            errorMessage = "Invalid store URL."
             return
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
-        // Supabase REST accepts the publishable/anon key as the bearer token too.
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("public", forHTTPHeaderField: "Accept-Profile")
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
 
-            guard let http = response as? HTTPURLResponse else {
-                throw StoreError.invalidResponse
+            if let httpResponse = response as? HTTPURLResponse,
+               !(200...299).contains(httpResponse.statusCode) {
+                throw URLError(.badServerResponse)
             }
 
-            guard (200...299).contains(http.statusCode) else {
-                let serverText = String(data: data, encoding: .utf8) ?? ""
-                throw StoreError.http(http.statusCode, serverText)
-            }
-
-            guard !data.isEmpty else {
-                apps = []
-                errorMessage = "لوحة التحكم أعادت بيانات فارغة."
-                return
-            }
-
-            do {
-                let decoded = try JSONDecoder().decode([StoreApp].self, from: data)
-                apps = decoded
-            } catch {
-                let raw = String(data: data, encoding: .utf8) ?? ""
-                throw StoreError.decode(error.localizedDescription, raw)
-            }
-
-            if apps.isEmpty {
-                errorMessage = "الاتصال بلوحة التحكم ناجح، لكن لا توجد تطبيقات في store_apps."
-            } else {
-                errorMessage = nil
-            }
-        } catch is CancellationError {
-            return
+            apps = try JSONDecoder().decode([StoreApp].self, from: data)
         } catch {
             errorMessage = error.localizedDescription
-            print("KINDA store error:", error)
-        }
-    }
-
-    private enum StoreError: LocalizedError {
-        case invalidResponse
-        case http(Int, String)
-        case decode(String, String)
-
-        var errorDescription: String? {
-            switch self {
-            case .invalidResponse:
-                return "استجابة لوحة التحكم غير صالحة."
-            case .http(let status, let body):
-                let clean = body.trimmingCharacters(in: .whitespacesAndNewlines)
-                if clean.isEmpty { return "لوحة التحكم أعادت HTTP \(status)." }
-                return "لوحة التحكم أعادت HTTP \(status): \(clean.prefix(220))"
-            case .decode(let message, _):
-                return "تعذر قراءة بيانات التطبيقات: \(message)"
-            }
         }
     }
 }
-
 
 struct StoreIconView: View {
     let urlString: String
