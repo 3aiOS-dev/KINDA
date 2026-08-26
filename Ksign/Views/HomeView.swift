@@ -54,6 +54,7 @@ struct KindaGridBackground: View {
     }
 }
 
+@MainActor
 struct HomeView: View {
     @StateObject private var storeManager = KindaStoreManager.shared
     @StateObject private var downloadManager = DownloadManager.shared
@@ -783,21 +784,15 @@ struct HomeView: View {
         // into the existing Imported Core Data store.
         for _ in 0..<150 {
             if let imported =
-                await MainActor.run(
-                    body: {
-                        newestImported(
-                            matching: app
-                        )
-                    }
+                newestImported(
+                    matching: app
                 ) {
-                await MainActor.run {
-                    activeDownloadID = nil
-                    downloadProgress[
-                        app.id
-                    ] = nil
-                    selectedInstallUUID =
-                        imported.uuid
-                }
+                activeDownloadID = nil
+                downloadProgress[
+                    app.id
+                ] = nil
+                selectedInstallUUID =
+                    imported.uuid
                 return
             }
 
@@ -895,14 +890,15 @@ struct HomeView: View {
                 return
             }
 
-            DispatchQueue.main.async {
-                if let imported =
+            Task { @MainActor in
+                let uuid =
                     newestImportedFromURL(
                         url
-                    )
-                {
+                    )?.uuid
+
+                if let uuid {
                     selectedInstallUUID =
-                        imported.uuid
+                        uuid
                 }
 
                 if accessed {
@@ -915,10 +911,14 @@ struct HomeView: View {
     private func newestImportedFromURL(
         _ url: URL
     ) -> Imported? {
-        importedApps.first {
-            $0.source?.lastPathComponent ==
-                url.lastPathComponent
-        } ?? importedApps.first
+        importedApps.first(
+            where: {
+                $0.source?.lastPathComponent ==
+                    url.lastPathComponent
+            }
+        ) ?? importedApps.first(
+            where: { _ in true }
+        )
     }
 
     // MARK: URL import
@@ -1040,18 +1040,13 @@ struct HomeView: View {
         }
 
         for _ in 0..<150 {
-            if
-                let imported =
-                    await MainActor.run(
-                        body: {
-                            importedApps.first
-                        }
-                    )
+            if let imported =
+                importedApps.first(
+                    where: { _ in true }
+                )
             {
-                await MainActor.run {
-                    selectedInstallUUID =
-                        imported.uuid
-                }
+                selectedInstallUUID =
+                    imported.uuid
                 return
             }
 
