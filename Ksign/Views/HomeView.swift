@@ -1,7 +1,58 @@
+//
+// HomeView.swift
+// KINDA
+//
+// الرئيسية:
+// • التطبيقات من لوحة التحكم فقط.
+// • لا توجد صفحة تفاصيل.
+// • زر "تثبيت" يبدأ تنزيل IPA مباشرة.
+// • بعد اكتمال الاستيراد تظهر InstallPreview مباشرة.
+// • استيراد IPA من الملفات أو الرابط موجود هنا.
+// • لا يوجد تبويب توقيع.
+//
+
 import SwiftUI
+import CoreData
 import NimbleViews
 import UniformTypeIdentifiers
 import UIKit
+
+enum KindaTheme {
+    static var pageBG: Color { Color(.systemBackground) }
+    static var cardBG: Color { Color(.secondarySystemGroupedBackground) }
+}
+
+struct KindaGridBackground: View {
+    private let spacing: CGFloat = 48
+
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+
+            var x: CGFloat = 0
+            while x <= size.width {
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+                x += spacing
+            }
+
+            var y: CGFloat = 0
+            while y <= size.height {
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+                y += spacing
+            }
+
+            context.stroke(
+                path,
+                with: .color(.primary.opacity(0.045)),
+                lineWidth: 0.7
+            )
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
+    }
+}
 
 struct HomeView: View {
     @StateObject private var storeManager = KindaStoreManager.shared
@@ -9,18 +60,57 @@ struct HomeView: View {
 
     @State private var searchText = ""
     @State private var selectedCategory = "الكل"
+
     @State private var showFileImporter = false
     @State private var showURLSheet = false
     @State private var ipaURL = ""
-    @State private var installingAppID: String?
-    @State private var progress: [String: Double] = [:]
+
+    @State private var activeDownloadID: String?
+    @State private var downloadProgress: [String: Double] = [:]
+
+    @State private var selectedInstallUUID: String?
+
+    @FetchRequest(
+        entity: Imported.entity(),
+        sortDescriptors: [
+            NSSortDescriptor(
+                keyPath: \Imported.date,
+                ascending: false
+            )
+        ],
+        animation: .snappy
+    )
+    private var importedApps: FetchedResults<Imported>
 
     private var filteredApps: [StoreApp] {
-        storeManager.filtered(
-            searchText,
-            source: "لوحة التحكم",
-            category: selectedCategory
-        )
+        storeManager.apps.filter { app in
+            let matchesSearch =
+                searchText.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ).isEmpty ||
+                app.name.localizedCaseInsensitiveContains(
+                    searchText
+                ) ||
+                app.bundleIdentifier.localizedCaseInsensitiveContains(
+                    searchText
+                )
+
+            let matchesCategory =
+                selectedCategory == "الكل" ||
+                app.category == selectedCategory
+
+            return matchesSearch && matchesCategory
+        }
+    }
+
+    private var selectedImportedApp: Imported? {
+        guard let uuid = selectedInstallUUID else {
+            return nil
+        }
+
+        return importedApps.first {
+            $0.uuid == uuid
+        }
     }
 
     var body: some View {
@@ -31,22 +121,28 @@ struct HomeView: View {
 
                 KindaGridBackground()
 
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 12) {
-                        header
-                        importActions
+                ScrollView(
+                    showsIndicators: false
+                ) {
+                    LazyVStack(
+                        spacing: 11
+                    ) {
+                        titleHeader
                         searchBar
+                        importButtons
                         categoryBar
 
                         if filteredApps.isEmpty {
                             emptyState
                         } else {
-                            ForEach(filteredApps) { app in
+                            ForEach(
+                                filteredApps
+                            ) { app in
                                 appRow(app)
                             }
                         }
 
-                        if storeManager.hasMoreServerPages {
+                        if storeManager.hasMorePages {
                             nextButton
                         }
                     }
@@ -54,49 +150,95 @@ struct HomeView: View {
                     .padding(.bottom, 35)
                 }
                 .refreshable {
-                    await storeManager.load()
+                    await storeManager.reload()
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(
+                .hidden,
+                for: .navigationBar
+            )
         }
-        .environment(\.layoutDirection, .rightToLeft)
+        .environment(
+            \.layoutDirection,
+            .rightToLeft
+        )
         .task {
             if storeManager.apps.isEmpty {
-                await storeManager.load()
+                await storeManager.reload()
             }
         }
-        .sheet(isPresented: $showURLSheet) {
-            urlSheet
+        .sheet(
+            isPresented:
+                Binding(
+                    get: {
+                        selectedInstallUUID != nil &&
+                        selectedImportedApp != nil
+                    },
+                    set: { value in
+                        if !value {
+                            selectedInstallUUID = nil
+                        }
+                    }
+                )
+        ) {
+            if let app = selectedImportedApp {
+                InstallPreviewView(
+                    app: app
+                )
+                .presentationDetents(
+                    [.height(220), .medium]
+                )
+                .presentationDragIndicator(
+                    .visible
+                )
+            }
+        }
+        .sheet(
+            isPresented:
+                $showURLSheet
+        ) {
+            urlImportSheet
         }
         .fileImporter(
-            isPresented: $showFileImporter,
-            allowedContentTypes: [.item],
+            isPresented:
+                $showFileImporter,
+            allowedContentTypes: [
+                .ipa,
+                .tipa
+            ],
             allowsMultipleSelection: false
         ) { result in
             handleFileImport(result)
         }
         .onReceive(
             NotificationCenter.default.publisher(
-                for: .kindaOpenInstallPreview
+                for:
+                    NSNotification.Name(
+                        "kinda.directInstall"
+                    )
             )
         ) { notification in
             guard
-                let url =
-                    notification.userInfo?["url"] as? URL
+                let uuid =
+                    notification.userInfo?[
+                        "uuid"
+                    ] as? String
             else {
                 return
             }
 
-            openInstallPreview(url: url)
+            selectedInstallUUID = uuid
         }
     }
 
-    private var header: some View {
+    // MARK: Header
+
+    private var titleHeader: some View {
         VStack(spacing: 4) {
             Text("الرئيسية")
                 .font(
                     .system(
-                        size: 21,
+                        size: 20,
                         weight: .bold
                     )
                 )
@@ -108,96 +250,41 @@ struct HomeView: View {
                         weight: .medium
                     )
                 )
-                .foregroundStyle(.secondary)
+                .foregroundStyle(
+                    .secondary
+                )
         }
         .frame(
-            maxWidth: .infinity,
-            alignment: .center
+            maxWidth: .infinity
         )
-        .padding(.top, 18)
-    }
-
-    private var importActions: some View {
-        HStack(spacing: 9) {
-            actionButton(
-                title: "استيراد من الملفات",
-                icon: "folder.fill"
-            ) {
-                showFileImporter = true
-            }
-
-            actionButton(
-                title: "استيراد من الرابط",
-                icon: "link"
-            ) {
-                ipaURL = ""
-                showURLSheet = true
-            }
-        }
-    }
-
-    private func actionButton(
-        title: String,
-        icon: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(
-                        .system(
-                            size: 15,
-                            weight: .semibold
-                        )
-                    )
-
-                Text(title)
-                    .font(
-                        .system(
-                            size: 11,
-                            weight: .semibold
-                        )
-                    )
-                    .lineLimit(1)
-            }
-            .foregroundStyle(.primary)
-            .frame(
-                maxWidth: .infinity
-            )
-            .frame(height: 42)
-            .background(
-                .ultraThinMaterial,
-                in: RoundedRectangle(
-                    cornerRadius: 14,
-                    style: .continuous
-                )
-            )
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: 14,
-                    style: .continuous
-                )
-                .stroke(
-                    Color.primary.opacity(0.07),
-                    lineWidth: 0.7
-                )
-            }
-        }
-        .buttonStyle(.plain)
+        .padding(.top, 17)
+        .padding(.bottom, 4)
     }
 
     private var searchBar: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+            Image(
+                systemName:
+                    "magnifyingglass"
+            )
+            .foregroundStyle(
+                .secondary
+            )
 
             TextField(
-                "البحث عن تطبيق",
-                text: $searchText
+                "ألعاب وتطبيقات والمزيد",
+                text:
+                    $searchText
             )
-            .textFieldStyle(.plain)
-            .multilineTextAlignment(.trailing)
-            .textInputAutocapitalization(.never)
+            .textFieldStyle(
+                .plain
+            )
+            .multilineTextAlignment(
+                .trailing
+            )
+            .textInputAutocapitalization(
+                .never
+            )
             .autocorrectionDisabled()
 
             if !searchText.isEmpty {
@@ -208,62 +295,134 @@ struct HomeView: View {
                         systemName:
                             "xmark.circle.fill"
                     )
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(
+                        .secondary
+                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(
+                    .plain
+                )
             }
         }
-        .padding(.horizontal, 12)
+        .padding(
+            .horizontal,
+            12
+        )
         .frame(height: 42)
         .background(
             .ultraThinMaterial,
-            in: RoundedRectangle(
-                cornerRadius: 14,
-                style: .continuous
+            in:
+                RoundedRectangle(
+                    cornerRadius: 14,
+                    style: .continuous
+                )
+        )
+    }
+
+    private var importButtons: some View {
+        HStack(spacing: 9) {
+            importButton(
+                title:
+                    "استيراد من الملفات",
+                icon:
+                    "folder.fill"
+            ) {
+                showFileImporter = true
+            }
+
+            importButton(
+                title:
+                    "استيراد من الرابط",
+                icon:
+                    "link"
+            ) {
+                ipaURL = ""
+                showURLSheet = true
+            }
+        }
+    }
+
+    private func importButton(
+        title: String,
+        icon: String,
+        action:
+            @escaping () -> Void
+    ) -> some View {
+        Button(
+            action: action
+        ) {
+            HStack(spacing: 8) {
+                Image(
+                    systemName: icon
+                )
+                .font(
+                    .system(
+                        size: 15,
+                        weight: .semibold
+                    )
+                )
+
+                Text(title)
+                    .font(
+                        .system(
+                            size: 11,
+                            weight: .semibold
+                        )
+                    )
+                    .lineLimit(1)
+            }
+            .foregroundStyle(
+                .primary
             )
+            .frame(
+                maxWidth: .infinity
+            )
+            .frame(height: 42)
+            .background(
+                .ultraThinMaterial,
+                in:
+                    RoundedRectangle(
+                        cornerRadius: 14,
+                        style: .continuous
+                    )
+            )
+        }
+        .buttonStyle(
+            .plain
         )
     }
 
     private var categoryBar: some View {
         Group {
-            if storeManager.availableCategories.count > 1 {
+            if storeManager.categories.count > 1 {
                 ScrollView(
                     .horizontal,
                     showsIndicators: false
                 ) {
                     HStack(spacing: 7) {
+                        categoryChip(
+                            title: "الكل",
+                            selected:
+                                selectedCategory == "الكل"
+                        ) {
+                            selectedCategory =
+                                "الكل"
+                        }
+
                         ForEach(
-                            storeManager.availableCategories,
+                            storeManager.categories,
                             id: \.self
                         ) { category in
-                            Button {
-                                selectedCategory = category
-                            } label: {
-                                Text(category)
-                                    .font(
-                                        .system(
-                                            size: 11,
-                                            weight: .semibold
-                                        )
-                                    )
-                                    .foregroundStyle(
-                                        selectedCategory == category
-                                            ? .primary
-                                            : .secondary
-                                    )
-                                    .padding(
-                                        .horizontal,
-                                        12
-                                    )
-                                    .frame(height: 29)
-                                    .background(
-                                        selectedCategory == category
-                                            ? Color.primary.opacity(0.12)
-                                            : Color.secondary.opacity(0.07),
-                                        in: Capsule()
-                                    )
+                            categoryChip(
+                                title:
+                                    category,
+                                selected:
+                                    selectedCategory ==
+                                    category
+                            ) {
+                                selectedCategory =
+                                    category
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -271,13 +430,57 @@ struct HomeView: View {
         }
     }
 
+    private func categoryChip(
+        title: String,
+        selected: Bool,
+        action:
+            @escaping () -> Void
+    ) -> some View {
+        Button(
+            action: action
+        ) {
+            Text(title)
+                .font(
+                    .system(
+                        size: 11,
+                        weight: .semibold
+                    )
+                )
+                .foregroundStyle(
+                    selected
+                        ? .primary
+                        : .secondary
+                )
+                .padding(
+                    .horizontal,
+                    12
+                )
+                .frame(height: 29)
+                .background(
+                    selected
+                        ? Color.primary.opacity(
+                            0.12
+                        )
+                        : Color.secondary.opacity(
+                            0.07
+                        ),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(
+            .plain
+        )
+    }
+
+    // MARK: App row
+
     private func appRow(
         _ app: StoreApp
     ) -> some View {
         HStack(spacing: 11) {
-            StoreIconView(
-                urlString: app.iconURL,
-                size: 50
+            DashboardIconView(
+                urlString:
+                    app.iconURL
             )
 
             VStack(
@@ -295,11 +498,15 @@ struct HomeView: View {
 
                 HStack(spacing: 7) {
                     if !app.version.isEmpty {
-                        Text("v\(app.version)")
+                        Text(
+                            "v\(app.version)"
+                        )
                     }
 
                     if !app.category.isEmpty {
-                        Text(app.category)
+                        Text(
+                            app.category
+                        )
                     }
                 }
                 .font(
@@ -309,87 +516,63 @@ struct HomeView: View {
                         design: .monospaced
                     )
                 )
-                .foregroundStyle(.secondary)
+                .foregroundStyle(
+                    .secondary
+                )
             }
 
             Spacer()
 
-            installButton(app)
+            installButton(
+                app
+            )
         }
         .padding(11)
         .background(
-            Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(
-                cornerRadius: 18,
-                style: .continuous
-            )
+            KindaTheme.cardBG,
+            in:
+                RoundedRectangle(
+                    cornerRadius: 18,
+                    style: .continuous
+                )
         )
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: 18,
-                style: .continuous
-            )
-            .stroke(
-                Color.primary.opacity(0.055),
-                lineWidth: 0.7
-            )
-        }
     }
 
     private func installButton(
         _ app: StoreApp
     ) -> some View {
-        let isDownloading =
-            installingAppID == app.id
+        let downloading =
+            activeDownloadID == app.id
 
         let value =
-            progress[app.id] ?? 0
+            downloadProgress[
+                app.id
+            ] ?? 0
 
         return Button {
-            startDirectInstall(app)
+            install(
+                app
+            )
         } label: {
-            HStack(spacing: 6) {
-                if isDownloading {
-                    ZStack {
-                        Circle()
-                            .stroke(
-                                Color.secondary.opacity(0.25),
-                                lineWidth: 2
-                            )
-                            .frame(
-                                width: 14,
-                                height: 14
-                            )
-
-                        Circle()
-                            .trim(
-                                from: 0,
-                                to: max(
-                                    0.03,
-                                    value
-                                )
-                            )
-                            .stroke(
-                                Color.primary,
-                                style: StrokeStyle(
-                                    lineWidth: 2,
-                                    lineCap: .round
-                                )
-                            )
-                            .frame(
-                                width: 14,
-                                height: 14
-                            )
-                            .rotationEffect(
-                                .degrees(-90)
-                            )
-                    }
+            HStack(spacing: 5) {
+                if downloading {
+                    ProgressView(
+                        value: value
+                    )
+                    .progressViewStyle(
+                        .circular
+                    )
+                    .controlSize(
+                        .small
+                    )
 
                     Text(
                         "\(Int(value * 100))%"
                     )
                 } else {
-                    Text("تثبيت")
+                    Text(
+                        "تثبيت"
+                    )
                 }
             }
             .font(
@@ -398,37 +581,47 @@ struct HomeView: View {
                     weight: .semibold
                 )
             )
-            .foregroundStyle(.primary)
+            .foregroundStyle(
+                .primary
+            )
             .padding(
                 .horizontal,
                 12
             )
             .frame(height: 32)
             .background(
-                Color.primary.opacity(0.09),
+                Color.primary.opacity(
+                    0.09
+                ),
                 in: Capsule()
             )
         }
-        .buttonStyle(.plain)
-        .disabled(isDownloading)
+        .buttonStyle(
+            .plain
+        )
+        .disabled(
+            downloading
+        )
     }
 
     private var nextButton: some View {
         Button {
             Task {
-                await storeManager.loadNextServerPage()
+                await storeManager.loadNextPage()
             }
         } label: {
             HStack(spacing: 7) {
                 if storeManager.isLoading {
                     ProgressView()
-                        .controlSize(.small)
+                        .controlSize(
+                            .small
+                        )
                 }
 
                 Text(
                     storeManager.isLoading
                         ? "جاري التحميل..."
-                        : "تحميل المزيد"
+                        : "التالي"
                 )
                 .font(
                     .system(
@@ -437,7 +630,9 @@ struct HomeView: View {
                     )
                 )
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(
+                .primary
+            )
             .frame(
                 maxWidth: .infinity
             )
@@ -447,50 +642,68 @@ struct HomeView: View {
                 in: Capsule()
             )
         }
-        .buttonStyle(.plain)
-        .disabled(storeManager.isLoading)
+        .buttonStyle(
+            .plain
+        )
+        .disabled(
+            storeManager.isLoading
+        )
     }
 
     private var emptyState: some View {
         VStack(spacing: 9) {
             Image(
-                systemName: "square.grid.2x2"
+                systemName:
+                    "square.grid.2x2"
             )
             .font(
                 .system(
-                    size: 28,
+                    size: 27,
                     weight: .light
                 )
             )
-            .foregroundStyle(.secondary)
-
-            Text("لا توجد تطبيقات")
-                .font(
-                    .system(
-                        size: 15,
-                        weight: .semibold
-                    )
-                )
+            .foregroundStyle(
+                .secondary
+            )
 
             Text(
-                "أضف التطبيقات من لوحة التحكم لتظهر هنا."
+                storeManager.isLoading
+                    ? "جاري تحميل التطبيقات..."
+                    : "لا توجد تطبيقات"
             )
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
+            .font(
+                .system(
+                    size: 15,
+                    weight: .semibold
+                )
+            )
+
+            Text(
+                "التطبيقات المعروضة هنا تأتي من لوحة التحكم فقط."
+            )
+            .font(
+                .system(size: 11)
+            )
+            .foregroundStyle(
+                .secondary
+            )
+            .multilineTextAlignment(
+                .center
+            )
         }
         .frame(
             maxWidth: .infinity
         )
-        .padding(.vertical, 45)
+        .padding(.vertical, 42)
     }
 
-    // MARK: - Direct installation from dashboard
+    // MARK: Install
 
-    private func startDirectInstall(
+    private func install(
         _ app: StoreApp
     ) {
         guard
-            installingAppID == nil
+            activeDownloadID == nil
         else {
             return
         }
@@ -500,171 +713,130 @@ struct HomeView: View {
                 URL(
                     string:
                         app.ipaURL.trimmingCharacters(
-                            in: .whitespacesAndNewlines
+                            in:
+                                .whitespacesAndNewlines
                         )
                 )
         else {
             showError(
-                title: "التثبيت",
-                message: "رابط IPA غير صالح."
+                "رابط IPA غير صالح."
             )
             return
         }
 
-        installingAppID = app.id
-        progress[app.id] = 0
+        let id =
+            "FeatherManualDownload_\(UUID().uuidString)"
 
-        StoreNotificationManager.postStarted(
-            appName: app.name,
-            version: app.version
-        )
+        activeDownloadID =
+            app.id
+        downloadProgress[
+            app.id
+        ] = 0
+
+        let download =
+            downloadManager.startDownload(
+                from: url,
+                id: id
+            )
 
         Task {
-            await downloadAndOpenInstaller(
-                url: url,
-                appID: app.id,
-                appName: app.name
+            await watchDownload(
+                download,
+                app: app
             )
         }
     }
 
-    private func downloadAndOpenInstaller(
-        url: URL,
-        appID: String,
-        appName: String
+    private func watchDownload(
+        _ download: Download,
+        app: StoreApp
     ) async {
-        do {
-            let downloadID =
-                "HomeDirect-\(appID)-\(UUID().uuidString)"
-
-            let download =
-                downloadManager.startDownload(
-                    from: url,
-                    id: downloadID
-                )
-
-            while true {
-                try Task.checkCancellation()
-
-                guard
-                    let current =
-                        downloadManager.getDownload(
-                            by: downloadID
-                        )
-                else {
-                    break
+        while
+            activeDownloadID == app.id
+        {
+            if
+                let current =
+                    downloadManager.getDownload(
+                        by: download.id
+                    )
+            {
+                await MainActor.run {
+                    downloadProgress[
+                        app.id
+                    ] = current.overallProgress
                 }
 
-                progress[appID] =
-                    current.progress
-
-                if current.totalBytes > 0,
-                   current.progress >= 0.999 {
+                if current.progress >= 0.999 {
                     break
                 }
-
-                try await Task.sleep(
-                    nanoseconds:
-                        250_000_000
-                )
+            } else {
+                break
             }
 
-            // Give the existing importer/install pipeline
-            // a moment to register the downloaded IPA.
-            try await Task.sleep(
+            try? await Task.sleep(
                 nanoseconds:
-                    350_000_000
+                    200_000_000
             )
+        }
 
+        // DownloadManager moves and extracts the package
+        // into the existing Imported Core Data store.
+        for _ in 0..<150 {
             if let imported =
-                findImportedApp(
-                    appID: appID,
-                    appName: appName
+                await MainActor.run(
+                    body: {
+                        newestImported(
+                            matching: app
+                        )
+                    }
                 ) {
                 await MainActor.run {
-                    installingAppID = nil
-                    progress[appID] = nil
-
-                    openInstallPreview(
-                        imported: imported
-                    )
+                    activeDownloadID = nil
+                    downloadProgress[
+                        app.id
+                    ] = nil
+                    selectedInstallUUID =
+                        imported.uuid
                 }
                 return
             }
 
-            // Fallback: notify the existing installation
-            // pipeline with the download identifier.
-            NotificationCenter.default.post(
-                name: .kindaOpenInstallPreview,
-                object: nil,
-                userInfo: [
-                    "downloadID": downloadID,
-                    "appID": appID
-                ]
+            try? await Task.sleep(
+                nanoseconds:
+                    200_000_000
             )
+        }
 
-            await MainActor.run {
-                installingAppID = nil
-                progress[appID] = nil
-            }
-        } catch {
-            await MainActor.run {
-                installingAppID = nil
-                progress[appID] = nil
-
-                showError(
-                    title: "التثبيت",
-                    message:
-                        "تعذر تنزيل \(appName): \(error.localizedDescription)"
-                )
-            }
+        await MainActor.run {
+            activeDownloadID = nil
+            downloadProgress[
+                app.id
+            ] = nil
         }
     }
 
-    private func findImportedApp(
-        appID: String,
-        appName: String
+    private func newestImported(
+        matching app: StoreApp
     ) -> Imported? {
-        let request =
-            Imported.fetchRequest()
-
-        request.fetchLimit = 20
-
-        guard
-            let values =
-                try? PersistenceController.shared.container
-                    .viewContext
-                    .fetch(request)
-        else {
-            return nil
-        }
-
-        return values.first {
-            guard
-                let name = $0.name
-            else {
-                return false
+        importedApps.first {
+            if
+                let identifier =
+                    $0.identifier,
+                !app.bundleIdentifier.isEmpty,
+                identifier ==
+                    app.bundleIdentifier
+            {
+                return true
             }
 
-            return name.localizedCaseInsensitiveCompare(
-                appName
-            ) == .orderedSame
+            return
+                $0.name?.localizedCaseInsensitiveCompare(
+                    app.name
+                ) == .orderedSame
         }
     }
 
-    private func openInstallPreview(
-        imported: Imported
-    ) {
-        NotificationCenter.default.post(
-            name: .kindaOpenInstallPreview,
-            object: nil,
-            userInfo: [
-                "imported": imported
-            ]
-        )
-    }
-
-    // MARK: - File import
+    // MARK: File import
 
     private func handleFileImport(
         _ result:
@@ -674,74 +846,84 @@ struct HomeView: View {
             >
     ) {
         switch result {
-        case .success(let urls):
-            guard let url = urls.first else {
+        case .success(
+            let urls
+        ):
+            guard
+                let url =
+                    urls.first
+            else {
                 return
             }
 
-            Task {
-                await importIPAFile(
-                    url
-                )
-            }
+            importFile(
+                url
+            )
 
-        case .failure(let error):
+        case .failure(
+            let error
+        ):
             showError(
-                title: "استيراد",
-                message:
-                    error.localizedDescription
+                error.localizedDescription
             )
         }
     }
 
-    private func importIPAFile(
+    private func importFile(
         _ url: URL
-    ) async {
+    ) {
         let accessed =
             url.startAccessingSecurityScopedResource()
 
-        defer {
-            if accessed {
-                url.stopAccessingSecurityScopedResource()
+        let id =
+            "FeatherManualDownload_\(UUID().uuidString)"
+
+        let download =
+            downloadManager.startArchive(
+                from: url,
+                id: id
+            )
+
+        downloadManager.handlePachageFile(
+            url: url,
+            dl: download
+        ) { error in
+            if let error {
+                showError(
+                    "تعذر استيراد IPA: \(error.localizedDescription)"
+                )
+                return
             }
-        }
 
-        do {
-            let destination =
-                FileManager.default.temporaryDirectory
-                    .appendingPathComponent(
-                        "Imported-\(UUID().uuidString)"
+            DispatchQueue.main.async {
+                if let imported =
+                    newestImportedFromURL(
+                        url
                     )
-                    .appendingPathExtension(
-                        url.pathExtension.isEmpty
-                            ? "ipa"
-                            : url.pathExtension
-                    )
+                {
+                    selectedInstallUUID =
+                        imported.uuid
+                }
 
-            try FileManager.default.copyItem(
-                at: url,
-                to: destination
-            )
-
-            NotificationCenter.default.post(
-                name: .kindaOpenInstallPreview,
-                object: nil,
-                userInfo: [
-                    "url": destination
-                ]
-            )
-        } catch {
-            showError(
-                title: "استيراد IPA",
-                message:
-                    error.localizedDescription
-            )
+                if accessed {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
         }
     }
 
-    // MARK: - URL import
+    private func newestImportedFromURL(
+        _ url: URL
+    ) -> Imported? {
+        importedApps.first {
+            $0.source?.lastPathComponent ==
+                url.lastPathComponent
+        } ?? importedApps.first
+    }
 
-    private var urlSheet: some View {
+    // MARK: URL import
+
+    private var urlImportSheet: some View {
         NavigationStack {
             Form {
                 Section {
@@ -749,12 +931,12 @@ struct HomeView: View {
                         "رابط ملف IPA",
                         text: $ipaURL
                     )
-                    .textInputAutocapitalization(.never)
+                    .textInputAutocapitalization(
+                        .never
+                    )
                     .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                } footer: {
-                    Text(
-                        "يجب أن يكون الرابط رابط تنزيل لملف IPA."
+                    .keyboardType(
+                        .URL
                     )
                 }
 
@@ -762,59 +944,77 @@ struct HomeView: View {
                     Button {
                         let value =
                             ipaURL.trimmingCharacters(
-                                in: .whitespacesAndNewlines
+                                in:
+                                    .whitespacesAndNewlines
                             )
 
                         guard
                             let url =
                                 URL(
-                                    string: value
+                                    string:
+                                        value
                                 ),
                             let scheme =
                                 url.scheme?.lowercased(),
                             scheme == "http" ||
                             scheme == "https"
                         else {
+                            showError(
+                                "رابط غير صالح."
+                            )
                             return
                         }
 
-                        showURLSheet = false
+                        showURLSheet =
+                            false
+
+                        let id =
+                            "FeatherManualDownload_\(UUID().uuidString)"
+
+                        let download =
+                            downloadManager.startDownload(
+                                from: url,
+                                id: id
+                            )
 
                         Task {
-                            await importIPAFromURL(
-                                url
+                            await watchURLDownload(
+                                download
                             )
                         }
                     } label: {
                         HStack {
                             Spacer()
-                            Text("تنزيل وبدء التثبيت")
-                                .font(
-                                    .system(
-                                        size: 14,
-                                        weight: .semibold
-                                    )
+                            Text(
+                                "تنزيل وبدء التثبيت"
+                            )
+                            .font(
+                                .system(
+                                    size: 14,
+                                    weight: .semibold
                                 )
+                            )
                             Spacer()
                         }
                     }
-                    .disabled(
-                        ipaURL
-                            .trimmingCharacters(
-                                in: .whitespacesAndNewlines
-                            )
-                            .isEmpty
-                    )
                 }
             }
-            .navigationTitle("استيراد IPA")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(
+                "استيراد IPA"
+            )
+            .navigationBarTitleDisplayMode(
+                .inline
+            )
             .toolbar {
                 ToolbarItem(
-                    placement: .topBarLeading
+                    placement:
+                        .topBarLeading
                 ) {
-                    Button("إلغاء") {
-                        showURLSheet = false
+                    Button(
+                        "إلغاء"
+                    ) {
+                        showURLSheet =
+                            false
                     }
                 }
             }
@@ -825,109 +1025,51 @@ struct HomeView: View {
         )
     }
 
-    private func importIPAFromURL(
-        _ url: URL
+    private func watchURLDownload(
+        _ download: Download
     ) async {
-        do {
-            var request =
-                URLRequest(
-                    url: url
-                )
-
-            request.timeoutInterval = 60
-            request.cachePolicy =
-                .reloadIgnoringLocalCacheData
-
-            let (
-                data,
-                response
-            ) =
-                try await URLSession.shared.data(
-                    for: request
-                )
-
-            guard
-                let http =
-                    response as? HTTPURLResponse,
-                (200...299).contains(
-                    http.statusCode
-                ),
-                !data.isEmpty
-            else {
-                throw ImportError.invalidResponse
-            }
-
-            let destination =
-                FileManager.default.temporaryDirectory
-                    .appendingPathComponent(
-                        "Imported-\(UUID().uuidString)"
-                    )
-                    .appendingPathExtension(
-                        url.pathExtension.isEmpty
-                            ? "ipa"
-                            : url.pathExtension
-                    )
-
-            try data.write(
-                to: destination,
-                options: .atomic
-            )
-
-            NotificationCenter.default.post(
-                name: .kindaOpenInstallPreview,
-                object: nil,
-                userInfo: [
-                    "url": destination
-                ]
-            )
-        } catch {
-            showError(
-                title: "استيراد IPA",
-                message:
-                    error.localizedDescription
+        while
+            downloadManager.getDownload(
+                by: download.id
+            ) != nil
+        {
+            try? await Task.sleep(
+                nanoseconds:
+                    250_000_000
             )
         }
-    }
 
-    private func openInstallPreview(
-        url: URL
-    ) {
-        NotificationCenter.default.post(
-            name: .kindaOpenInstallPreview,
-            object: nil,
-            userInfo: [
-                "url": url
-            ]
-        )
+        for _ in 0..<150 {
+            if
+                let imported =
+                    await MainActor.run(
+                        body: {
+                            importedApps.first
+                        }
+                    )
+            {
+                await MainActor.run {
+                    selectedInstallUUID =
+                        imported.uuid
+                }
+                return
+            }
+
+            try? await Task.sleep(
+                nanoseconds:
+                    200_000_000
+            )
+        }
     }
 
     private func showError(
-        title: String,
-        message: String
+        _ message: String
     ) {
         UIAlertController.showAlertWithOk(
-            title: title,
-            message: message
+            title:
+                "التثبيت",
+            message:
+                message
         )
-    }
-}
-
-// MARK: - Shared notification
-
-extension Notification.Name {
-    static let kindaOpenInstallPreview =
-        Notification.Name(
-            "kinda.openInstallPreview"
-        )
-}
-
-enum ImportError: LocalizedError {
-    case invalidResponse
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidResponse:
-            return "الرابط لم يرجع ملف IPA صالحاً."
-        }
     }
 }
