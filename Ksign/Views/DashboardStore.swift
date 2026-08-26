@@ -2,8 +2,8 @@
 // DashboardStore.swift
 // KINDA
 //
-// The dashboard models and manager are defined in HomeView.swift.
-// This file intentionally contains no duplicate StoreApp/KindaStoreManager
-// declarations. Keeping this file in the target is safe and avoids the
-// invalid-redeclaration errors caused by the previous duplicate implementation.
+// StoreApp و KindaStoreManager موجودان في HomeView.swift.
+// هذا الملف intentionally لا يحتوي تعريفات مكررة.
 //
+
+import Foundation
