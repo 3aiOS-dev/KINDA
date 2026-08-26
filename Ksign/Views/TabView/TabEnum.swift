@@ -2,8 +2,8 @@
 // TabEnum.swift
 // KINDA
 //
-// النسخة الجديدة: لا يوجد تبويب "توقيع".
-// التبويبات الظاهرة فقط: الرئيسية + الإعدادات.
+// فقط الرئيسية والإعدادات.
+// لا يوجد تبويب توقيع ولا مكتبة ولا المزيد.
 //
 
 import SwiftUI
@@ -33,26 +33,27 @@ enum TabEnum: String, CaseIterable, Hashable {
 
     @ViewBuilder
     @MainActor
-    static func view(for tab: TabEnum) -> some View {
+    static func view(
+        for tab: TabEnum
+    ) -> some View {
         switch tab {
         case .home:
             HomeView()
-
         case .settings:
             SettingsView()
         }
     }
 
-    // التبويبات الأساسية فقط.
-    static var defaultTabs: [TabEnum] {
+    static var defaultTabs:
+        [TabEnum] {
         [
             .home,
             .settings
         ]
     }
 
-    // لا توجد أي تبويبات إضافية أو "المزيد".
-    static var customizableTabs: [TabEnum] {
+    static var customizableTabs:
+        [TabEnum] {
         []
     }
 }
