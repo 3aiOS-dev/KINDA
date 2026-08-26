@@ -2,13 +2,13 @@
 //  HomeView.swift
 //  KINDA
 //
-//  الرئيسية:
-//  - التطبيقات من لوحة التحكم فقط.
-//  - لا توجد مصادر خارجية.
+//  الرئيسية فقط:
+//  - التطبيقات من لوحة التحكم.
+//  - زر تثبيت مباشر.
+//  - بعد اكتمال التنزيل تفتح شاشة التثبيت مباشرة.
+//  - استيراد IPA من الملفات أو الرابط.
+//  - لا توجد شاشة تفاصيل.
 //  - لا يوجد تبويب توقيع.
-//  - الضغط على التطبيق يفتح التفاصيل.
-//  - زر تثبيت يبدأ التثبيت مباشرة بدون فتح تبويب آخر.
-//  - استيراد IPA من الملفات أو من الرابط موجود في الرئيسية.
 //
 
 import SwiftUI
@@ -22,14 +22,11 @@ struct HomeView: View {
 
     @State private var searchText = ""
     @State private var selectedCategory = "الكل"
-    @State private var selectedApp: StoreApp?
     @State private var showFileImporter = false
-    @State private var showURLImporter = false
-    @State private var ipaURL = ""
     @State private var showURLSheet = false
-    @State private var isImporting = false
-
-    private let pageSize = 50
+    @State private var ipaURL = ""
+    @State private var installingAppID: String?
+    @State private var progress: [String: Double] = [:]
 
     private var filteredApps: [StoreApp] {
         storeManager.filtered(
@@ -48,16 +45,18 @@ struct HomeView: View {
                 KindaGridBackground()
 
                 ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 14) {
+                    LazyVStack(spacing: 12) {
                         header
                         importActions
-
+                        searchBar
                         categoryBar
 
                         if filteredApps.isEmpty {
                             emptyState
                         } else {
-                            appsList
+                            ForEach(filteredApps) { app in
+                                appRow(app)
+                            }
                         }
 
                         if storeManager.hasMoreServerPages {
@@ -72,57 +71,47 @@ struct HomeView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .environment(
-                \.layoutDirection,
-                .rightToLeft
-            )
         }
-        .environment(
-            \.layoutDirection,
-            .rightToLeft
-        )
+        .environment(\.layoutDirection, .rightToLeft)
         .task {
             if storeManager.apps.isEmpty {
                 await storeManager.load()
             }
         }
-        .sheet(item: $selectedApp) { app in
-            StoreAppDetailsView(
-                app: app
-            )
-            .presentationDetents(
-                [.medium, .large]
-            )
-            .presentationDragIndicator(.visible)
-        }
         .sheet(isPresented: $showURLSheet) {
-            urlImportSheet
+            urlSheet
         }
         .fileImporter(
             isPresented: $showFileImporter,
-            allowedContentTypes: [
-                .item
-            ],
+            allowedContentTypes: [.item],
             allowsMultipleSelection: false
         ) { result in
             handleFileImport(result)
         }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .kindaOpenInstallPreview
+            )
+        ) { notification in
+            guard
+                let url =
+                    notification.userInfo?["url"] as? URL
+            else {
+                return
+            }
+
+            openInstallPreview(url: url)
+        }
     }
 
-    // MARK: - Header
-
     private var header: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 4) {
             Text("الرئيسية")
                 .font(
                     .system(
                         size: 21,
                         weight: .bold
                     )
-                )
-                .frame(
-                    maxWidth: .infinity,
-                    alignment: .center
                 )
 
             Text("تطبيقات لوحة التحكم")
@@ -134,24 +123,24 @@ struct HomeView: View {
                 )
                 .foregroundStyle(.secondary)
         }
+        .frame(
+            maxWidth: .infinity,
+            alignment: .center
+        )
         .padding(.top, 18)
     }
 
-    // MARK: - Import
-
     private var importActions: some View {
-        HStack(spacing: 10) {
-            importButton(
-                title: "من الملفات",
-                subtitle: "IPA",
+        HStack(spacing: 9) {
+            actionButton(
+                title: "استيراد من الملفات",
                 icon: "folder.fill"
             ) {
                 showFileImporter = true
             }
 
-            importButton(
-                title: "من الرابط",
-                subtitle: "IPA",
+            actionButton(
+                title: "استيراد من الرابط",
                 icon: "link"
             ) {
                 ipaURL = ""
@@ -160,70 +149,45 @@ struct HomeView: View {
         }
     }
 
-    private func importButton(
+    private func actionButton(
         title: String,
-        subtitle: String,
         icon: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(
                         .system(
-                            size: 16,
+                            size: 15,
                             weight: .semibold
                         )
                     )
-                    .frame(
-                        width: 38,
-                        height: 38
-                    )
-                    .background(
-                        Color.primary.opacity(0.08),
-                        in: RoundedRectangle(
-                            cornerRadius: 11,
-                            style: .continuous
+
+                Text(title)
+                    .font(
+                        .system(
+                            size: 11,
+                            weight: .semibold
                         )
                     )
-
-                VStack(
-                    alignment: .trailing,
-                    spacing: 2
-                ) {
-                    Text(title)
-                        .font(
-                            .system(
-                                size: 13,
-                                weight: .semibold
-                            )
-                        )
-
-                    Text(subtitle)
-                        .font(
-                            .system(
-                                size: 9,
-                                weight: .medium,
-                                design: .monospaced
-                            )
-                        )
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 0)
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 12)
-            .frame(height: 62)
+            .foregroundStyle(.primary)
+            .frame(
+                maxWidth: .infinity
+            )
+            .frame(height: 42)
             .background(
                 .ultraThinMaterial,
                 in: RoundedRectangle(
-                    cornerRadius: 16,
+                    cornerRadius: 14,
                     style: .continuous
                 )
             )
             .overlay {
                 RoundedRectangle(
-                    cornerRadius: 16,
+                    cornerRadius: 14,
                     style: .continuous
                 )
                 .stroke(
@@ -235,90 +199,43 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
 
-    private var urlImportSheet: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField(
-                        "رابط ملف IPA",
-                        text: $ipaURL
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField(
+                "البحث عن تطبيق",
+                text: $searchText
+            )
+            .textFieldStyle(.plain)
+            .multilineTextAlignment(.trailing)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(
+                        systemName:
+                            "xmark.circle.fill"
                     )
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                } footer: {
-                    Text(
-                        "ضع رابط مباشر لملف IPA."
-                    )
+                    .foregroundStyle(.secondary)
                 }
-
-                Section {
-                    Button {
-                        let value =
-                            ipaURL.trimmingCharacters(
-                                in: .whitespacesAndNewlines
-                            )
-
-                        guard
-                            let url = URL(
-                                string: value
-                            ),
-                            let scheme =
-                                url.scheme?.lowercased(),
-                            scheme == "http" ||
-                            scheme == "https"
-                        else {
-                            return
-                        }
-
-                        showURLSheet = false
-
-                        Task {
-                            await importFromURL(
-                                url
-                            )
-                        }
-                    } label: {
-                        HStack {
-                            Spacer()
-                            Text("استيراد")
-                                .font(
-                                    .system(
-                                        size: 15,
-                                        weight: .semibold
-                                    )
-                                )
-                            Spacer()
-                        }
-                    }
-                    .disabled(
-                        ipaURL
-                            .trimmingCharacters(
-                                in: .whitespacesAndNewlines
-                            )
-                            .isEmpty
-                    )
-                }
-            }
-            .navigationTitle("استيراد من الرابط")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(
-                    placement: .topBarLeading
-                ) {
-                    Button("إلغاء") {
-                        showURLSheet = false
-                    }
-                }
+                .buttonStyle(.plain)
             }
         }
-        .environment(
-            \.layoutDirection,
-            .rightToLeft
+        .padding(.horizontal, 12)
+        .frame(height: 42)
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(
+                cornerRadius: 14,
+                style: .continuous
+            )
         )
     }
-
-    // MARK: - Categories
 
     private var categoryBar: some View {
         Group {
@@ -333,8 +250,7 @@ struct HomeView: View {
                             id: \.self
                         ) { category in
                             Button {
-                                selectedCategory =
-                                    category
+                                selectedCategory = category
                             } label: {
                                 Text(category)
                                     .font(
@@ -352,7 +268,7 @@ struct HomeView: View {
                                         .horizontal,
                                         12
                                     )
-                                    .frame(height: 30)
+                                    .frame(height: 29)
                                     .background(
                                         selectedCategory == category
                                             ? Color.primary.opacity(0.12)
@@ -364,20 +280,6 @@ struct HomeView: View {
                         }
                     }
                 }
-                .environment(
-                    \.layoutDirection,
-                    .rightToLeft
-                )
-            }
-        }
-    }
-
-    // MARK: - Apps
-
-    private var appsList: some View {
-        LazyVStack(spacing: 10) {
-            ForEach(filteredApps) { app in
-                appRow(app)
             }
         }
     }
@@ -385,83 +287,143 @@ struct HomeView: View {
     private func appRow(
         _ app: StoreApp
     ) -> some View {
-        Button {
-            selectedApp = app
-        } label: {
-            HStack(spacing: 12) {
-                StoreIconView(
-                    urlString: app.iconURL,
-                    size: 52
-                )
+        HStack(spacing: 11) {
+            StoreIconView(
+                urlString: app.iconURL,
+                size: 50
+            )
 
-                VStack(
-                    alignment: .trailing,
-                    spacing: 4
-                ) {
-                    Text(app.name)
-                        .font(
-                            .system(
-                                size: 15,
-                                weight: .semibold
-                            )
-                        )
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-
-                    HStack(spacing: 7) {
-                        if !app.version.isEmpty {
-                            Text(
-                                "v\(app.version)"
-                            )
-                        }
-
-                        if !app.category.isEmpty {
-                            Text(app.category)
-                        }
-                    }
+            VStack(
+                alignment: .trailing,
+                spacing: 4
+            ) {
+                Text(app.name)
                     .font(
                         .system(
-                            size: 9,
-                            weight: .medium,
-                            design: .monospaced
+                            size: 14,
+                            weight: .semibold
                         )
                     )
-                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                HStack(spacing: 7) {
+                    if !app.version.isEmpty {
+                        Text("v\(app.version)")
+                    }
+
+                    if !app.category.isEmpty {
+                        Text(app.category)
+                    }
                 }
-
-                Spacer()
-
-                Image(
-                    systemName: "chevron.left"
-                )
                 .font(
                     .system(
-                        size: 12,
-                        weight: .semibold
+                        size: 9,
+                        weight: .medium,
+                        design: .monospaced
                     )
                 )
                 .foregroundStyle(.secondary)
             }
-            .padding(12)
-            .background(
-                Color(.secondarySystemGroupedBackground),
-                in: RoundedRectangle(
-                    cornerRadius: 19,
-                    style: .continuous
+
+            Spacer()
+
+            installButton(app)
+        }
+        .padding(11)
+        .background(
+            Color(.secondarySystemGroupedBackground),
+            in: RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
+            )
+            .stroke(
+                Color.primary.opacity(0.055),
+                lineWidth: 0.7
+            )
+        }
+    }
+
+    private func installButton(
+        _ app: StoreApp
+    ) -> some View {
+        let isDownloading =
+            installingAppID == app.id
+
+        let value =
+            progress[app.id] ?? 0
+
+        return Button {
+            startDirectInstall(app)
+        } label: {
+            HStack(spacing: 6) {
+                if isDownloading {
+                    ZStack {
+                        Circle()
+                            .stroke(
+                                Color.secondary.opacity(0.25),
+                                lineWidth: 2
+                            )
+                            .frame(
+                                width: 14,
+                                height: 14
+                            )
+
+                        Circle()
+                            .trim(
+                                from: 0,
+                                to: max(
+                                    0.03,
+                                    value
+                                )
+                            )
+                            .stroke(
+                                Color.primary,
+                                style: StrokeStyle(
+                                    lineWidth: 2,
+                                    lineCap: .round
+                                )
+                            )
+                            .frame(
+                                width: 14,
+                                height: 14
+                            )
+                            .rotationEffect(
+                                .degrees(-90)
+                            )
+                    }
+
+                    Text(
+                        "\(Int(value * 100))%"
+                    )
+                } else {
+                    Text("تثبيت")
+                }
+            }
+            .font(
+                .system(
+                    size: 11,
+                    weight: .semibold
                 )
             )
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: 19,
-                    style: .continuous
-                )
-                .stroke(
-                    Color.primary.opacity(0.055),
-                    lineWidth: 0.7
-                )
-            }
+            .foregroundStyle(.primary)
+            .padding(
+                .horizontal,
+                12
+            )
+            .frame(height: 32)
+            .background(
+                Color.primary.opacity(0.09),
+                in: Capsule()
+            )
         }
         .buttonStyle(.plain)
+        .disabled(isDownloading)
     }
 
     private var nextButton: some View {
@@ -470,7 +432,7 @@ struct HomeView: View {
                 await storeManager.loadNextServerPage()
             }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 if storeManager.isLoading {
                     ProgressView()
                         .controlSize(.small)
@@ -492,31 +454,24 @@ struct HomeView: View {
             .frame(
                 maxWidth: .infinity
             )
-            .frame(height: 42)
+            .frame(height: 40)
             .background(
                 .ultraThinMaterial,
                 in: Capsule()
             )
         }
         .buttonStyle(.plain)
-        .disabled(
-            storeManager.isLoading
-        )
+        .disabled(storeManager.isLoading)
     }
 
-    // MARK: - Empty
-
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 9) {
             Image(
-                systemName:
-                    searchText.isEmpty
-                    ? "square.grid.2x2"
-                    : "magnifyingglass"
+                systemName: "square.grid.2x2"
             )
             .font(
                 .system(
-                    size: 27,
+                    size: 28,
                     weight: .light
                 )
             )
@@ -533,18 +488,193 @@ struct HomeView: View {
             Text(
                 "أضف التطبيقات من لوحة التحكم لتظهر هنا."
             )
-            .font(
-                .system(
-                    size: 11
-                )
-            )
+            .font(.system(size: 11))
             .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
         }
         .frame(
             maxWidth: .infinity
         )
         .padding(.vertical, 45)
+    }
+
+    // MARK: - Direct installation from dashboard
+
+    private func startDirectInstall(
+        _ app: StoreApp
+    ) {
+        guard
+            installingAppID == nil
+        else {
+            return
+        }
+
+        guard
+            let url =
+                URL(
+                    string:
+                        app.ipaURL.trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        )
+                )
+        else {
+            showError(
+                title: "التثبيت",
+                message: "رابط IPA غير صالح."
+            )
+            return
+        }
+
+        installingAppID = app.id
+        progress[app.id] = 0
+
+        StoreNotificationManager.postStarted(
+            appName: app.name,
+            version: app.version
+        )
+
+        Task {
+            await downloadAndOpenInstaller(
+                url: url,
+                appID: app.id,
+                appName: app.name
+            )
+        }
+    }
+
+    private func downloadAndOpenInstaller(
+        url: URL,
+        appID: String,
+        appName: String
+    ) async {
+        do {
+            let downloadID =
+                "HomeDirect-\(appID)-\(UUID().uuidString)"
+
+            let download =
+                downloadManager.startDownload(
+                    from: url,
+                    id: downloadID
+                )
+
+            while true {
+                try Task.checkCancellation()
+
+                guard
+                    let current =
+                        downloadManager.getDownload(
+                            by: downloadID
+                        )
+                else {
+                    break
+                }
+
+                progress[appID] =
+                    current.progress
+
+                if current.totalBytes > 0,
+                   current.progress >= 0.999 {
+                    break
+                }
+
+                try await Task.sleep(
+                    nanoseconds:
+                        250_000_000
+                )
+            }
+
+            // Give the existing importer/install pipeline
+            // a moment to register the downloaded IPA.
+            try await Task.sleep(
+                nanoseconds:
+                    350_000_000
+            )
+
+            if let imported =
+                findImportedApp(
+                    appID: appID,
+                    appName: appName
+                ) {
+                await MainActor.run {
+                    installingAppID = nil
+                    progress[appID] = nil
+
+                    openInstallPreview(
+                        imported: imported
+                    )
+                }
+                return
+            }
+
+            // Fallback: notify the existing installation
+            // pipeline with the download identifier.
+            NotificationCenter.default.post(
+                name: .kindaOpenInstallPreview,
+                object: nil,
+                userInfo: [
+                    "downloadID": downloadID,
+                    "appID": appID
+                ]
+            )
+
+            await MainActor.run {
+                installingAppID = nil
+                progress[appID] = nil
+            }
+        } catch {
+            await MainActor.run {
+                installingAppID = nil
+                progress[appID] = nil
+
+                showError(
+                    title: "التثبيت",
+                    message:
+                        "تعذر تنزيل \(appName): \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
+    private func findImportedApp(
+        appID: String,
+        appName: String
+    ) -> Imported? {
+        let request =
+            Imported.fetchRequest()
+
+        request.fetchLimit = 20
+
+        guard
+            let values =
+                try? PersistenceController.shared.container
+                    .viewContext
+                    .fetch(request)
+        else {
+            return nil
+        }
+
+        return values.first {
+            guard
+                let name = $0.name
+            else {
+                return false
+            }
+
+            return name.localizedCaseInsensitiveCompare(
+                appName
+            ) == .orderedSame
+        }
+    }
+
+    private func openInstallPreview(
+        imported: Imported
+    ) {
+        NotificationCenter.default.post(
+            name: .kindaOpenInstallPreview,
+            object: nil,
+            userInfo: [
+                "imported": imported
+            ]
+        )
     }
 
     // MARK: - File import
@@ -563,26 +693,23 @@ struct HomeView: View {
             }
 
             Task {
-                await importFromFile(
+                await importIPAFile(
                     url
                 )
             }
 
         case .failure(let error):
-            print(
-                "IPA file import error: \(error.localizedDescription)"
+            showError(
+                title: "استيراد",
+                message:
+                    error.localizedDescription
             )
         }
     }
 
-    private func importFromFile(
+    private func importIPAFile(
         _ url: URL
     ) async {
-        isImporting = true
-        defer {
-            isImporting = false
-        }
-
         let accessed =
             url.startAccessingSecurityScopedResource()
 
@@ -596,7 +723,7 @@ struct HomeView: View {
             let destination =
                 FileManager.default.temporaryDirectory
                     .appendingPathComponent(
-                        UUID().uuidString
+                        "Imported-\(UUID().uuidString)"
                     )
                     .appendingPathExtension(
                         url.pathExtension.isEmpty
@@ -609,31 +736,116 @@ struct HomeView: View {
                 to: destination
             )
 
-            await presentImportedFile(
-                destination
+            NotificationCenter.default.post(
+                name: .kindaOpenInstallPreview,
+                object: nil,
+                userInfo: [
+                    "url": destination
+                ]
             )
         } catch {
-            UIAlertController.showAlertWithOk(
+            showError(
                 title: "استيراد IPA",
                 message:
-                    "تعذر قراءة الملف: \(error.localizedDescription)"
+                    error.localizedDescription
             )
         }
     }
 
     // MARK: - URL import
 
-    private func importFromURL(
+    private var urlSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(
+                        "رابط ملف IPA",
+                        text: $ipaURL
+                    )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                } footer: {
+                    Text(
+                        "يجب أن يكون الرابط رابط تنزيل لملف IPA."
+                    )
+                }
+
+                Section {
+                    Button {
+                        let value =
+                            ipaURL.trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            )
+
+                        guard
+                            let url =
+                                URL(
+                                    string: value
+                                ),
+                            let scheme =
+                                url.scheme?.lowercased(),
+                            scheme == "http" ||
+                            scheme == "https"
+                        else {
+                            return
+                        }
+
+                        showURLSheet = false
+
+                        Task {
+                            await importIPAFromURL(
+                                url
+                            )
+                        }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("تنزيل وبدء التثبيت")
+                                .font(
+                                    .system(
+                                        size: 14,
+                                        weight: .semibold
+                                    )
+                                )
+                            Spacer()
+                        }
+                    }
+                    .disabled(
+                        ipaURL
+                            .trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            )
+                            .isEmpty
+                    )
+                }
+            }
+            .navigationTitle("استيراد IPA")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(
+                    placement: .topBarLeading
+                ) {
+                    Button("إلغاء") {
+                        showURLSheet = false
+                    }
+                }
+            }
+        }
+        .environment(
+            \.layoutDirection,
+            .rightToLeft
+        )
+    }
+
+    private func importIPAFromURL(
         _ url: URL
     ) async {
-        isImporting = true
-        defer {
-            isImporting = false
-        }
-
         do {
             var request =
-                URLRequest(url: url)
+                URLRequest(
+                    url: url
+                )
 
             request.timeoutInterval = 60
             request.cachePolicy =
@@ -658,44 +870,41 @@ struct HomeView: View {
                 throw ImportError.invalidResponse
             }
 
-            let fileExtension =
-                url.pathExtension.isEmpty
-                    ? "ipa"
-                    : url.pathExtension
-
-            let fileURL =
+            let destination =
                 FileManager.default.temporaryDirectory
                     .appendingPathComponent(
                         "Imported-\(UUID().uuidString)"
                     )
                     .appendingPathExtension(
-                        fileExtension
+                        url.pathExtension.isEmpty
+                            ? "ipa"
+                            : url.pathExtension
                     )
 
             try data.write(
-                to: fileURL,
+                to: destination,
                 options: .atomic
             )
 
-            await presentImportedFile(
-                fileURL
+            NotificationCenter.default.post(
+                name: .kindaOpenInstallPreview,
+                object: nil,
+                userInfo: [
+                    "url": destination
+                ]
             )
         } catch {
-            UIAlertController.showAlertWithOk(
-                title: "استيراد من الرابط",
+            showError(
+                title: "استيراد IPA",
                 message:
-                    "تعذر تنزيل ملف IPA: \(error.localizedDescription)"
+                    error.localizedDescription
             )
         }
     }
 
-    // MARK: - Direct installation
-
-    private func presentImportedFile(
-        _ url: URL
-    ) async {
-        // Notification consumed by the existing
-        // InstallPreviewView flow.
+    private func openInstallPreview(
+        url: URL
+    ) {
         NotificationCenter.default.post(
             name: .kindaOpenInstallPreview,
             object: nil,
@@ -704,6 +913,25 @@ struct HomeView: View {
             ]
         )
     }
+
+    private func showError(
+        title: String,
+        message: String
+    ) {
+        UIAlertController.showAlertWithOk(
+            title: title,
+            message: message
+        )
+    }
+}
+
+// MARK: - Shared notification
+
+extension Notification.Name {
+    static let kindaOpenInstallPreview =
+        Notification.Name(
+            "kinda.openInstallPreview"
+        )
 }
 
 enum ImportError: LocalizedError {
@@ -712,16 +940,7 @@ enum ImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            return "رابط الملف لم يرجع ملف IPA صالحاً."
+            return "الرابط لم يرجع ملف IPA صالحاً."
         }
     }
-}
-
-// MARK: - Notifications
-
-extension Notification.Name {
-    static let kindaOpenInstallPreview =
-        Notification.Name(
-            "kinda.openInstallPreview"
-        )
 }
