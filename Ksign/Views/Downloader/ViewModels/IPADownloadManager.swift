@@ -1,252 +1,255 @@
 //
-//  IPADownloadManager.swift
-//  Ksign
-//
-//  Created by Nagata Asami on 5/24/25.
+// IPADownloadManager.swift
+// KINDA
 //
 
+import Foundation
 import SwiftUI
-import WebKit
 
-class IPADownloadManager: NSObject, ObservableObject {
-    @Published var downloadItems: [DownloadItem] = []
-    
-    var activeItems: [DownloadItem] {
-        downloadItems.filter { !$0.isFinished }
-    }
-    
-    var finishedItems: [DownloadItem] {
-        downloadItems.filter { $0.isFinished }
-    }
-    
-    private var urlSession: URLSession!
-    private var activeDownloads: [Int: String] = [:] // taskIdentifier -> downloadItem.id
-    
+final class IPADownloadManager: NSObject, ObservableObject {
+    @Published private(set) var downloadItems: [DownloadItem] = []
+
+    var activeItems: [DownloadItem] { downloadItems.filter { !$0.isFinished } }
+    var finishedItems: [DownloadItem] { downloadItems.filter { $0.isFinished } }
+
+    private lazy var session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 60
+        configuration.timeoutIntervalForResource = 3600
+        configuration.waitsForConnectivity = true
+        return URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
+    }()
+
+    private var tasks: [Int: UUID] = [:]
+
     override init() {
         super.init()
-        setupURLSession()
-        loadDownloadedIPAs()
-    }
-    
-    private func setupURLSession() {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 300 // 5 minutes
-        config.waitsForConnectivity = true
-        urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        restoreFiles()
     }
 
     func isIPAFile(_ url: URL) -> Bool {
-        return url.pathExtension.lowercased() == "ipa"
+        url.pathExtension.lowercased() == "ipa"
     }
 
-    func loadDownloadedIPAs() {
-        let fileManager = FileManager.default
-        
-        let downloadDirectory = URL.documentsDirectory.appendingPathComponent("Downloads")
-        
-        
-        let activeDownloads = downloadItems.filter { !$0.isFinished }
-        downloadItems.removeAll()
-        
-        downloadItems.append(contentsOf: activeDownloads)
-        
-        do {
-            try fileManager.createDirectoryIfNeeded(at: downloadDirectory)
-            
-            let fileURLs = try fileManager.contentsOfDirectory(at: downloadDirectory, includingPropertiesForKeys: [.fileSizeKey], options: [])
-            
-            for fileURL in fileURLs {
-                if isIPAFile(fileURL) {
-                    if activeDownloads.contains(where: { $0.localPath == fileURL }) {
-                        continue
-                    }
-                    
-                    let attributes = try fileManager.attributesOfItem(atPath: fileURL.path)
-                    let fileSize = attributes[.size] as? Int64 ?? 0
-                    
-                    let item = DownloadItem(
-                        title: fileURL.lastPathComponent,
-                        url: fileURL,
-                        localPath: fileURL,
-                        isFinished: true,
-                        progress: 1.0,
-                        totalBytes: fileSize,
-                        bytesDownloaded: fileSize
-                    )
-                    downloadItems.append(item)
-                }
-            }
-            
-        } catch {
-            print("Failed to load downloaded IPAs: \(error)")
-        }
-    }
-    
-    func startDownload(url: URL, filename: String) {
-        let fileManager = FileManager.default
-        let downloadDirectory = URL.documentsDirectory.appendingPathComponent("Downloads")
-        try? fileManager.createDirectoryIfNeeded(at: downloadDirectory)
-        
-        let destinationURL = downloadDirectory.appendingPathComponent(filename)
+    @discardableResult
+    func startDownload(url: URL, filename: String? = nil) -> UUID {
+        let directory = URL.documentsDirectory.appendingPathComponent("Downloads", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let requested = (filename?.isEmpty == false ? filename! : url.lastPathComponent)
+        let clean = sanitize(requested.isEmpty ? "app.ipa" : requested)
+        let finalName = clean.lowercased().hasSuffix(".ipa") ? clean : clean + ".ipa"
+        let destination = uniqueURL(directory, finalName)
+
         let item = DownloadItem(
-            title: filename,
+            title: destination.deletingPathExtension().lastPathComponent,
             url: url,
-            localPath: destinationURL,
+            localPath: destination,
             isFinished: false,
             progress: 0,
             totalBytes: 0,
             bytesDownloaded: 0
         )
-        
-        DispatchQueue.main.async {
-            self.downloadItems.insert(item, at: 0)
-        }
-        
-        let task = urlSession.downloadTask(with: url)
-        
-        activeDownloads[task.taskIdentifier] = item.id.uuidString
-        
+
+        downloadItems.insert(item, at: 0)
+
+        let task = session.downloadTask(with: url)
+        tasks[task.taskIdentifier] = item.id
         task.resume()
+
+        return item.id
     }
-    
-    
+
     func cancelDownload(_ item: DownloadItem) {
-        urlSession.getAllTasks { tasks in
-            if let task = tasks.first(where: { task in
-                self.activeDownloads[task.taskIdentifier] == item.id.uuidString
-            }) {
-                task.cancel()
-            }
+        session.getAllTasks { [weak self] all in
+            guard let self else { return }
+            all.first(where: { self.tasks[$0.taskIdentifier] == item.id })?.cancel()
         }
     }
-    
-    func handleITMSServicesURL(_ url: URL, completion: @escaping (Result<String, Error>) -> Void) {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let queryItems = components.queryItems,
-              let manifestURLString = queryItems.first(where: { $0.name == "url" })?.value,
-              let manifestURL = URL(string: manifestURLString) else {
-            completion(.failure(NSError(domain: "ITMSError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid manifest URL"])))
+
+    func checkFileTypeAndDownload(
+        url: URL,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        guard let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            completion(.failure(error("الرابط يجب أن يكون HTTP أو HTTPS.")))
             return
         }
-        
-        urlSession.dataTask(with: manifestURL) { [weak self] data, _, error in
-            guard let self = self else { return }
-            if let error = error { completion(.failure(error)); return }
-            guard let data = data else { completion(.failure(NSError(domain: "ITMSError", code: 2, userInfo: [NSLocalizedDescriptionKey: "No data"]))); return }
-            
-            self.parseManifestPlist(data) { result in
-                switch result {
-                case .success(let url):
-                    let filename = url.lastPathComponent.isEmpty ? "app.ipa" : url.lastPathComponent
-                    self.startDownload(url: url, filename: filename)
-                    completion(.success(filename))
-                case .failure(let error):
-                    completion(.failure(error))
-                }
+
+        let id = startDownload(url: url, filename: url.lastPathComponent.isEmpty ? "app.ipa" : url.lastPathComponent)
+        completion(.success(id.uuidString))
+    }
+
+    func handleITMSServicesURL(
+        _ url: URL,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let value = components.queryItems?.first(where: { $0.name.lowercased() == "url" })?.value,
+              let manifestURL = URL(string: value) else {
+            completion(.failure(error("رابط itms-services غير صالح.")))
+            return
+        }
+
+        URLSession.shared.dataTask(with: manifestURL) { [weak self] data, response, requestError in
+            guard let self else { return }
+            if let requestError {
+                completion(.failure(requestError))
+                return
+            }
+
+            guard let response = response as? HTTPURLResponse,
+                  (200...299).contains(response.statusCode),
+                  let data else {
+                completion(.failure(error("تعذر تحميل manifest.")))
+                return
+            }
+
+            do {
+                let ipa = try self.parseManifest(data)
+                let id = self.startDownload(url: ipa, filename: ipa.lastPathComponent.isEmpty ? "app.ipa" : ipa.lastPathComponent)
+                completion(.success(id.uuidString))
+            } catch {
+                completion(.failure(error))
             }
         }.resume()
     }
 
-    func checkFileTypeAndDownload(url: URL, completion: @escaping (Result<String, Error>) -> Void) {
-        if isIPAFile(url) {
-            startDownload(url: url, filename: url.lastPathComponent)
-            completion(.success(url.lastPathComponent))
-        } else {
-            completion(.failure(NSError(domain: "FileTypeError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid file type"])))
+    private func parseManifest(_ data: Data) throws -> URL {
+        let object = try PropertyListSerialization.propertyList(from: data, format: nil)
+
+        guard let plist = object as? [String: Any],
+              let items = plist["items"] as? [[String: Any]] else {
+            throw error("ملف manifest غير صالح.")
         }
-    }
-    
-    private func parseManifestPlist(_ data: Data, completion: @escaping (Result<URL, Error>) -> Void) {
-        do {
-            if let plist = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-               let items = plist["items"] as? [[String: Any]],
-               let firstItem = items.first,
-               let assets = firstItem["assets"] as? [[String: Any]] {
-                
-                for asset in assets {
-                    if let kind = asset["kind"] as? String, kind == "software-package",
-                       let urlString = asset["url"] as? String,
-                       let url = URL(string: urlString) {
-                        completion(.success(url))
-                        return
-                    }
+
+        for item in items {
+            guard let assets = item["assets"] as? [[String: Any]] else { continue }
+
+            for asset in assets {
+                if asset["kind"] as? String == "software-package",
+                   let string = asset["url"] as? String,
+                   let url = URL(string: string) {
+                    return url
                 }
             }
-            completion(.failure(NSError(domain: "ManifestParseError", code: 2, userInfo: [NSLocalizedDescriptionKey: "No IPA URL found"])))
-        } catch {
-            completion(.failure(error))
         }
+
+        throw error("لم يتم العثور على رابط IPA داخل manifest.")
+    }
+
+    private func restoreFiles() {
+        let directory = URL.documentsDirectory.appendingPathComponent("Downloads", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        for file in files where isIPAFile(file) {
+            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+            downloadItems.append(
+                DownloadItem(
+                    title: file.deletingPathExtension().lastPathComponent,
+                    url: file,
+                    localPath: file,
+                    isFinished: true,
+                    progress: 1,
+                    totalBytes: size,
+                    bytesDownloaded: size
+                )
+            )
+        }
+    }
+
+    private func uniqueURL(_ directory: URL, _ filename: String) -> URL {
+        let first = directory.appendingPathComponent(filename)
+        if !FileManager.default.fileExists(atPath: first.path) { return first }
+
+        let ext = first.pathExtension
+        let base = first.deletingPathExtension().lastPathComponent
+
+        for n in 2...9999 {
+            let candidate = directory.appendingPathComponent("\(base)-\(n).\(ext)")
+            if !FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+        }
+
+        return directory.appendingPathComponent("\(UUID().uuidString).ipa")
+    }
+
+    private func sanitize(_ value: String) -> String {
+        let invalid = CharacterSet(charactersIn: "/:\\?%*|\"<>")
+        let result = value.components(separatedBy: invalid).joined(separator: "_")
+        return result.isEmpty ? "app.ipa" : result
+    }
+
+    private func error(_ message: String) -> NSError {
+        NSError(domain: "KINDA.IPA", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }
 
-    // MARK: - URLSessionDownloadDelegate
-
 extension IPADownloadManager: URLSessionDownloadDelegate {
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        let fileManager = FileManager.default
-        guard let downloadItemId = activeDownloads[downloadTask.taskIdentifier],
-              let index = downloadItems.firstIndex(where: { $0.id.uuidString == downloadItemId }) else { return }
-        
-        let item = downloadItems[index]
-        
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        guard let id = tasks[downloadTask.taskIdentifier],
+              let index = downloadItems.firstIndex(where: { $0.id == id }) else { return }
+
+        let destination = downloadItems[index].localPath
+
         do {
-            if fileManager.fileExists(atPath: item.localPath.path) {
-                try fileManager.removeItem(at: item.localPath)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
             }
-            try fileManager.moveItem(at: location, to: item.localPath)
-            
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                
-                var updatedItem = item
-                updatedItem.isFinished = true
-                updatedItem.progress = 1.0
-                if let fileSize = try? FileManager.default.attributesOfItem(atPath: item.localPath.path)[.size] as? Int64 {
-                    updatedItem.totalBytes = fileSize
-                    updatedItem.bytesDownloaded = fileSize
-                }
-                
-                if index < self.downloadItems.count {
-                    self.downloadItems[index] = updatedItem
-                }
-                self.activeDownloads.removeValue(forKey: downloadTask.taskIdentifier)
-            }
+
+            try FileManager.default.moveItem(at: location, to: destination)
+
+            let size = (try? destination.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+            downloadItems[index].isFinished = true
+            downloadItems[index].progress = 1
+            downloadItems[index].totalBytes = size
+            downloadItems[index].bytesDownloaded = size
         } catch {
-            print("Error saving downloaded file: \(error)")
-            DispatchQueue.main.async { [weak self] in
-                self?.downloadItems.remove(at: index)
-                self?.activeDownloads.removeValue(forKey: downloadTask.taskIdentifier)
-            }
+            downloadItems.remove(at: index)
         }
+
+        tasks.removeValue(forKey: downloadTask.taskIdentifier)
     }
-    
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        guard let downloadItemId = activeDownloads[downloadTask.taskIdentifier],
-              let index = downloadItems.firstIndex(where: { $0.id.uuidString == downloadItemId }) else { return }
-        
-        let progress = totalBytesExpectedToWrite > 0 ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite) : 0
-        
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, index < self.downloadItems.count else { return }
-            var item = self.downloadItems[index]
-            item.progress = progress
-            item.bytesDownloaded = totalBytesWritten
-            item.totalBytes = totalBytesExpectedToWrite
-            self.downloadItems[index] = item
-        }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        guard let id = tasks[downloadTask.taskIdentifier],
+              let index = downloadItems.firstIndex(where: { $0.id == id }) else { return }
+
+        downloadItems[index].bytesDownloaded = totalBytesWritten
+        downloadItems[index].totalBytes = totalBytesExpectedToWrite
+        downloadItems[index].progress = totalBytesExpectedToWrite > 0
+            ? min(max(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0), 1)
+            : 0
     }
-    
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error = error {
-            guard let downloadItemId = activeDownloads[task.taskIdentifier],
-                  let index = downloadItems.firstIndex(where: { $0.id.uuidString == downloadItemId }) else { return }
-            
-            DispatchQueue.main.async { [weak self] in
-                self?.downloadItems.remove(at: index)
-                self?.activeDownloads.removeValue(forKey: task.taskIdentifier)
-            }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        if let error,
+           let id = tasks[task.taskIdentifier],
+           let index = downloadItems.firstIndex(where: { $0.id == id }) {
+            downloadItems.remove(at: index)
+            print("IPA download error:", error)
         }
-        activeDownloads.removeValue(forKey: task.taskIdentifier)
+
+        tasks.removeValue(forKey: task.taskIdentifier)
     }
 }
