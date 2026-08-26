@@ -7,7 +7,7 @@ import Foundation
 import SwiftUI
 
 final class IPADownloadManager: NSObject, ObservableObject {
-    @Published private(set) var downloadItems: [DownloadItem] = []
+    @Published var downloadItems: [DownloadItem] = []
 
     var activeItems: [DownloadItem] { downloadItems.filter { !$0.isFinished } }
     var finishedItems: [DownloadItem] { downloadItems.filter { $0.isFinished } }
@@ -25,6 +25,65 @@ final class IPADownloadManager: NSObject, ObservableObject {
     override init() {
         super.init()
         restoreFiles()
+    }
+
+    /// Re-scans the Downloads directory and refreshes completed IPA entries.
+    /// DownloaderView calls this whenever another download finishes.
+    @MainActor
+    func loadDownloadedIPAs() {
+        let directory = URL.documentsDirectory
+            .appendingPathComponent("Downloads", isDirectory: true)
+
+        try? FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return
+        }
+
+        let existingFinishedPaths = Set(
+            downloadItems
+                .filter { $0.isFinished }
+                .map { $0.localPath.standardizedFileURL.path }
+        )
+
+        for file in files where isIPAFile(file) {
+            let normalized = file.standardizedFileURL.path
+            guard !existingFinishedPaths.contains(normalized) else {
+                continue
+            }
+
+            let size = Int64(
+                (try? file.resourceValues(
+                    forKeys: [.fileSizeKey]
+                ).fileSize) ?? 0
+            )
+
+            downloadItems.append(
+                DownloadItem(
+                    title: file.deletingPathExtension().lastPathComponent,
+                    url: file,
+                    localPath: file,
+                    isFinished: true,
+                    progress: 1,
+                    totalBytes: size,
+                    bytesDownloaded: size
+                )
+            )
+        }
+
+        downloadItems.sort {
+            if $0.isFinished != $1.isFinished {
+                return !$0.isFinished
+            }
+            return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
     }
 
     func isIPAFile(_ url: URL) -> Bool {
